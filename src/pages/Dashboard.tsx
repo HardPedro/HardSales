@@ -8,13 +8,16 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 export const Dashboard: React.FC = () => {
   const { userData } = useAuth();
   const [topSellers, setTopSellers] = useState<any[]>([]);
+  const [activeTeams, setActiveTeams] = useState<number>(0);
+  const [goalsAchieved, setGoalsAchieved] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!userData) return;
 
-    const q = query(collection(db, 'reports'), orderBy('approaches', 'desc'), limit(10));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    // Fetch reports for top sellers
+    const qReports = query(collection(db, 'reports'), orderBy('approaches', 'desc'), limit(10));
+    const unsubscribeReports = onSnapshot(qReports, (snapshot) => {
       const reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
       const userSales: Record<string, { name: string, volume: number }> = {};
@@ -33,7 +36,32 @@ export const Dashboard: React.FC = () => {
       setLoading(false);
     });
 
-    return unsubscribe;
+    // Fetch teams count
+    const qTeams = query(collection(db, 'teams'));
+    const unsubscribeTeams = onSnapshot(qTeams, (snapshot) => {
+      setActiveTeams(snapshot.docs.length);
+    }, (error) => {
+      console.error("Error fetching teams:", error);
+    });
+
+    // Fetch goals achieved
+    const qGoals = query(collection(db, 'goals'));
+    const unsubscribeGoals = onSnapshot(qGoals, (snapshot) => {
+      const allGoals = snapshot.docs.map(doc => doc.data());
+      const achieved = allGoals.filter(g => {
+        const progress = Math.min(((g.currentValue || 0) / (g.targetValue || 1)) * 100, 100);
+        return progress >= 100;
+      }).length;
+      setGoalsAchieved(achieved);
+    }, (error) => {
+      console.error("Error fetching goals:", error);
+    });
+
+    return () => {
+      unsubscribeReports();
+      unsubscribeTeams();
+      unsubscribeGoals();
+    };
   }, [userData]);
 
   if (loading) return <div className="text-slate-400">Carregando dashboard...</div>;
@@ -69,7 +97,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="ml-5">
               <p className="text-sm font-medium text-slate-400">Metas Atingidas</p>
-              <p className="text-2xl font-bold text-slate-100 mt-1">--</p>
+              <p className="text-2xl font-bold text-slate-100 mt-1">{goalsAchieved}</p>
             </div>
           </div>
         </div>
@@ -97,7 +125,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="ml-5">
               <p className="text-sm font-medium text-slate-400">Equipes Ativas</p>
-              <p className="text-2xl font-bold text-slate-100 mt-1">--</p>
+              <p className="text-2xl font-bold text-slate-100 mt-1">{activeTeams}</p>
             </div>
           </div>
         </div>

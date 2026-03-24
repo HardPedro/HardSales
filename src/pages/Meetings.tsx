@@ -19,7 +19,10 @@ const DAYS_OF_WEEK = [
 export const Meetings: React.FC = () => {
   const { userData } = useAuth();
   const [defaultDay, setDefaultDay] = useState<number>(1); // Default to Monday
+  const [startTime, setStartTime] = useState<string>('09:00');
+  const [duration, setDuration] = useState<number>(60); // minutes
   const [isScheduled, setIsScheduled] = useState(false);
+  const [meetingDetails, setMeetingDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [scheduling, setScheduling] = useState(false);
@@ -54,8 +57,10 @@ export const Meetings: React.FC = () => {
     const unsubscribeMeeting = onSnapshot(doc(db, 'meetings', meetingDateString), (docSnap) => {
       if (docSnap.exists() && docSnap.data().status === 'scheduled') {
         setIsScheduled(true);
+        setMeetingDetails(docSnap.data());
       } else {
         setIsScheduled(false);
+        setMeetingDetails(null);
       }
     });
 
@@ -106,6 +111,8 @@ export const Meetings: React.FC = () => {
         await setDoc(meetingRef, {
           date: meetingDateString,
           status: 'scheduled',
+          startTime,
+          duration,
           createdAt: new Date().toISOString(),
           createdBy: userData.name
         });
@@ -173,6 +180,19 @@ export const Meetings: React.FC = () => {
               <p className="text-slate-400">
                 {format(meetingDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
               </p>
+              {meetingDetails?.startTime && (
+                <div className="mt-3 flex items-center justify-center gap-4 text-sm text-slate-300 bg-slate-800/50 px-4 py-2 rounded-lg">
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 text-cyan-400" />
+                    {meetingDetails.startTime}
+                  </span>
+                  <span className="w-1 h-1 bg-slate-600 rounded-full"></span>
+                  <span className="flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-cyan-400" />
+                    {meetingDetails.duration} min
+                  </span>
+                </div>
+              )}
               {isPast && (
                 <span className="mt-4 px-3 py-1 bg-slate-800 text-slate-400 text-sm rounded-full">
                   Esta reunião já ocorreu
@@ -220,6 +240,34 @@ export const Meetings: React.FC = () => {
 
           {isAdmin && (
             <div className="mt-8 pt-6 border-t border-slate-800 w-full">
+              {!isScheduled && (
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-2 text-left">
+                      Horário de Início
+                    </label>
+                    <input
+                      type="time"
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-slate-200 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-2 text-left">
+                      Duração (minutos)
+                    </label>
+                    <input
+                      type="number"
+                      min="15"
+                      step="15"
+                      value={duration}
+                      onChange={(e) => setDuration(Number(e.target.value))}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-slate-200 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                    />
+                  </div>
+                </div>
+              )}
               <button
                 onClick={handleToggleMeeting}
                 disabled={scheduling}
