@@ -59,9 +59,18 @@ export const Layout: React.FC = () => {
   return (
     <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden">
       {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 z-50">
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 z-40">
         <div className="flex items-center space-x-2">
-          <div className="p-1.5 bg-cyan-500/10 rounded-lg">
+          <img 
+            src="/logo.png" 
+            alt="HardSales Logo" 
+            className="w-8 h-8 rounded-full object-cover"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+              e.currentTarget.nextElementSibling?.classList.remove('hidden');
+            }}
+          />
+          <div className="hidden p-1.5 bg-cyan-500/10 rounded-lg">
             <Shield className="w-5 h-5 text-cyan-400" />
           </div>
           <h1 className="text-lg font-bold text-slate-100 tracking-tight">HardSales</h1>
@@ -84,31 +93,37 @@ export const Layout: React.FC = () => {
 
       {/* Sidebar */}
       <div className={cn(
-        "fixed md:static inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 flex flex-col shadow-2xl transform transition-transform duration-300 ease-in-out",
+        "fixed md:static inset-y-0 left-0 z-50 w-72 bg-slate-900 border-r border-slate-800 flex flex-col shadow-2xl transform transition-transform duration-300 ease-in-out",
         isMobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
       )}>
-        <div className="p-6 border-b border-slate-800 hidden md:block">
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="p-2 bg-cyan-500/10 rounded-lg">
-              <Shield className="w-6 h-6 text-cyan-400" />
+        <div className="p-6 border-b border-slate-800">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-3">
+              <img 
+                src="/logo.png" 
+                alt="HardSales Logo" 
+                className="w-10 h-10 rounded-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                }}
+              />
+              <div className="hidden p-2 bg-cyan-500/10 rounded-lg">
+                <Shield className="w-6 h-6 text-cyan-400" />
+              </div>
+              <h1 className="text-xl font-bold text-slate-100 tracking-tight">HardSales</h1>
             </div>
-            <h1 className="text-xl font-bold text-slate-100 tracking-tight">HardSales</h1>
+            <button 
+              onClick={closeMobileMenu}
+              className="md:hidden p-2 text-slate-400 hover:text-slate-200 focus:outline-none"
+            >
+              <X className="w-6 h-6" />
+            </button>
           </div>
-          <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800/50">
-            <p className="text-sm text-slate-400">Olá,</p>
-            <p className="font-medium text-slate-200 truncate">{userData?.name}</p>
-            <span className="inline-block mt-2 px-2.5 py-1 text-xs font-semibold rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              {userData?.role === 'admin' ? 'Administrador' : 'Vendedor'}
-            </span>
-          </div>
-        </div>
-
-        {/* Mobile User Info */}
-        <div className="md:hidden p-4 border-b border-slate-800 mt-16">
-          <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-800/50">
-            <p className="text-sm text-slate-400">Olá,</p>
-            <p className="font-medium text-slate-200 truncate">{userData?.name}</p>
-            <span className="inline-block mt-2 px-2.5 py-1 text-xs font-semibold rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+          <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800/50">
+            <p className="text-sm text-slate-400 mb-1">Olá,</p>
+            <p className="font-medium text-slate-200 truncate text-lg">{userData?.name}</p>
+            <span className="inline-block mt-3 px-3 py-1 text-xs font-semibold rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
               {userData?.role === 'admin' ? 'Administrador' : 'Vendedor'}
             </span>
           </div>
