@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, onSnapshot, doc, setDoc, updateDoc, where, getDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, setDoc, updateDoc, where, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { CheckCircle, XCircle, UserPlus, TrendingUp, Phone, Users, DollarSign, Activity, AlertTriangle, ChevronRight, ArrowLeft, FileText } from 'lucide-react';
+import { CheckCircle, XCircle, UserPlus, TrendingUp, Phone, Users, DollarSign, Activity, AlertTriangle, ChevronRight, ArrowLeft, FileText, Trash2 } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -15,6 +15,7 @@ export const AdminDashboard: React.FC = () => {
   const [selectedSeller, setSelectedSeller] = useState<any | null>(null);
   const [sellerReports, setSellerReports] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [reportToDelete, setReportToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     if (userData?.role !== 'admin') return;
@@ -125,6 +126,52 @@ export const AdminDashboard: React.FC = () => {
   const openSellerProfile = (seller: any) => {
     setSelectedSeller(seller);
     setSellerReports(seller.reports);
+  };
+
+  const confirmDeleteReport = async () => {
+    if (!reportToDelete) return;
+    try {
+      await deleteDoc(doc(db, 'reports', reportToDelete));
+      setSellerReports(prev => prev.filter(r => r.id !== reportToDelete));
+      
+      // Update the metrics state to reflect the deletion
+      setMetrics(prev => prev.map(seller => {
+        if (seller.userId === selectedSeller.userId) {
+          const deletedReport = seller.reports.find((r: any) => r.id === reportToDelete);
+          if (deletedReport) {
+            return {
+              ...seller,
+              totalCalls: seller.totalCalls - (deletedReport.calls || 0),
+              totalApproaches: seller.totalApproaches - (deletedReport.approaches || 0),
+              reportCount: seller.reportCount - 1,
+              reports: seller.reports.filter((r: any) => r.id !== reportToDelete)
+            };
+          }
+        }
+        return seller;
+      }));
+      
+      // Update selectedSeller state as well
+      setSelectedSeller((prev: any) => {
+        if (!prev) return prev;
+        const deletedReport = prev.reports.find((r: any) => r.id === reportToDelete);
+        if (!deletedReport) return prev;
+        return {
+          ...prev,
+          totalCalls: prev.totalCalls - (deletedReport.calls || 0),
+          totalApproaches: prev.totalApproaches - (deletedReport.approaches || 0),
+          reportCount: prev.reportCount - 1,
+          reports: prev.reports.filter((r: any) => r.id !== reportToDelete)
+        };
+      });
+
+      setReportToDelete(null);
+      setError(null);
+    } catch (error) {
+      console.error("Error deleting report:", error);
+      setError("Erro ao apagar relatório.");
+      setReportToDelete(null);
+    }
   };
 
   if (loading) return <div className="text-slate-400">Carregando painel...</div>;
@@ -255,12 +302,45 @@ export const AdminDashboard: React.FC = () => {
                         )}
                       </div>
                     </div>
+                    <button
+                      onClick={() => setReportToDelete(report.id)}
+                      className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors ml-2"
+                      title="Apagar relatório"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
                   </div>
                 </div>
               ))
             )}
           </div>
         </div>
+
+        {/* Delete Confirmation Modal */}
+        {reportToDelete && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+              <h3 className="text-xl font-bold text-slate-100 mb-2">Apagar Relatório</h3>
+              <p className="text-slate-400 mb-6">
+                Tem certeza que deseja apagar este relatório? Esta ação não pode ser desfeita e os dados serão removidos das métricas.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setReportToDelete(null)}
+                  className="px-4 py-2 text-slate-300 hover:text-slate-100 font-medium transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmDeleteReport}
+                  className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-colors"
+                >
+                  Apagar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

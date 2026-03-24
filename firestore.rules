@@ -164,7 +164,7 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (isAdmin() || isOwner(userId));
       allow create: if isAuthenticated() && isValidUser() && (
         isAdmin() || 
         (uidUnchanged() && isOwner(userId) && request.resource.data.role == 'user') ||
