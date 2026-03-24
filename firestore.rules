@@ -13,6 +13,7 @@ service cloud.firestore {
       return isAuthenticated() && (
         ('email' in request.auth.token && request.auth.token.email == "pedrohardsolu2025@gmail.com") ||
         ('email' in request.auth.token && request.auth.token.email == "harddisk@salesmanager.local") ||
+        ('email' in request.auth.token && request.auth.token.email == "pedrosouzasilva2006@outlook.com") ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
       );
@@ -159,6 +160,34 @@ service cloud.firestore {
              (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is string);
     }
 
+    function isValidLead() {
+      return hasRequiredFields(['title', 'status', 'createdAt']) &&
+             request.resource.data.title is string &&
+             request.resource.data.status in ['available', 'pending', 'negotiating', 'converted', 'canceled'] &&
+             request.resource.data.createdAt is string &&
+             (!('totalScore' in request.resource.data) || request.resource.data.totalScore is string || request.resource.data.totalScore is number) &&
+             (!('reviewsCount' in request.resource.data) || request.resource.data.reviewsCount is string || request.resource.data.reviewsCount is number) &&
+             (!('street' in request.resource.data) || request.resource.data.street is string) &&
+             (!('city' in request.resource.data) || request.resource.data.city is string) &&
+             (!('state' in request.resource.data) || request.resource.data.state is string) &&
+             (!('countryCode' in request.resource.data) || request.resource.data.countryCode is string) &&
+             (!('website' in request.resource.data) || request.resource.data.website is string) &&
+             (!('phone' in request.resource.data) || request.resource.data.phone is string || request.resource.data.phone is number) &&
+             (!('url' in request.resource.data) || request.resource.data.url is string) &&
+             (!('categoryName' in request.resource.data) || request.resource.data.categoryName is string) &&
+             (!('assignedTo' in request.resource.data) || request.resource.data.assignedTo == null || request.resource.data.assignedTo is string) &&
+             (!('assignedAt' in request.resource.data) || request.resource.data.assignedAt == null || request.resource.data.assignedAt is string) &&
+             (!('importId' in request.resource.data) || request.resource.data.importId is string);
+    }
+
+    function isValidLeadImport() {
+      return hasRequiredFields(['fileName', 'importedAt', 'importedBy', 'leadCount']) &&
+             request.resource.data.fileName is string &&
+             request.resource.data.importedAt is string &&
+             request.resource.data.importedBy is string &&
+             request.resource.data.leadCount is number;
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -244,12 +273,35 @@ service cloud.firestore {
       allow create: if isAdmin() && isValidMeeting();
       allow update: if isAdmin() && isValidMeeting();
       allow delete: if isAdmin();
+      
+      match /attendances/{userId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated() && request.auth.uid == userId;
+        allow delete: if isAdmin();
+      }
     }
 
     match /access_requests/{requestId} {
       allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == requestId);
       allow create: if isAuthenticated() && isValidAccessRequest() && request.auth.uid == request.resource.data.uid;
       allow update: if isAdmin() && isValidAccessRequest();
+      allow delete: if isAdmin();
+    }
+
+    match /leads/{leadId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidLead();
+      allow update: if isAuthenticated() && isValidLead() && (
+        isAdmin() || 
+        (resource.data.status == 'available' && request.resource.data.assignedTo == request.auth.uid) ||
+        (resource.data.assignedTo == request.auth.uid && request.resource.data.assignedTo == request.auth.uid)
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /lead_imports/{importId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidLeadImport();
       allow delete: if isAdmin();
     }
   }

@@ -16,7 +16,8 @@ import {
   Menu,
   X,
   Megaphone,
-  Calendar
+  Calendar,
+  Users2
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -38,6 +39,7 @@ export const Layout: React.FC = () => {
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+    { name: 'Leads', path: '/leads', icon: Users2 },
     { name: 'Anúncios', path: '/announcements', icon: Megaphone },
     { name: 'Objetivos', path: '/objectives', icon: Target },
     { name: 'Metas', path: '/goals', icon: Flag },

@@ -14,6 +14,7 @@ import { AdminTeams } from './pages/AdminTeams';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { Announcements } from './pages/Announcements';
 import { Meetings } from './pages/Meetings';
+import { Leads } from './pages/Leads';
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="/reports" element={<Reports />} />
             <Route path="/announcements" element={<Announcements />} />
             <Route path="/meetings" element={<Meetings />} />
+            <Route path="/leads" element={<Leads />} />
             
             {/* Admin Routes */}
             <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>} />

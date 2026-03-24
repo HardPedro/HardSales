@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, query } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Calendar, CheckCircle2, XCircle, Settings, Clock } from 'lucide-react';
+import { Calendar, CheckCircle2, XCircle, Settings, Clock, Users, UserCheck } from 'lucide-react';
 import { startOfWeek, addDays, format, isBefore, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -23,6 +23,9 @@ export const Meetings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [scheduling, setScheduling] = useState(false);
+  const [attendances, setAttendances] = useState<any[]>([]);
+  const [hasAttended, setHasAttended] = useState(false);
+  const [markingAttendance, setMarkingAttendance] = useState(false);
 
   const isAdmin = userData?.role === 'admin';
 
@@ -56,8 +59,22 @@ export const Meetings: React.FC = () => {
       }
     });
 
-    return () => unsubscribeMeeting();
-  }, [meetingDateString, loading]);
+    // Listen to attendances for this meeting
+    const attendancesRef = collection(db, 'meetings', meetingDateString, 'attendances');
+    const unsubscribeAttendances = onSnapshot(query(attendancesRef), (snapshot) => {
+      const attList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAttendances(attList);
+      
+      if (userData) {
+        setHasAttended(attList.some(att => att.id === userData.uid));
+      }
+    });
+
+    return () => {
+      unsubscribeMeeting();
+      unsubscribeAttendances();
+    };
+  }, [meetingDateString, loading, userData]);
 
   const handleSaveDefaultDay = async (newDay: number) => {
     if (!isAdmin) return;
@@ -98,6 +115,24 @@ export const Meetings: React.FC = () => {
       alert("Erro ao alterar status da reunião.");
     } finally {
       setScheduling(false);
+    }
+  };
+
+  const handleMarkAttendance = async () => {
+    if (!userData || !isScheduled) return;
+    setMarkingAttendance(true);
+    try {
+      const attendanceRef = doc(db, 'meetings', meetingDateString, 'attendances', userData.uid);
+      await setDoc(attendanceRef, {
+        userId: userData.uid,
+        name: userData.name,
+        markedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error marking attendance:", error);
+      alert("Erro ao marcar presença.");
+    } finally {
+      setMarkingAttendance(false);
     }
   };
 
@@ -156,6 +191,33 @@ export const Meetings: React.FC = () => {
             </div>
           )}
 
+          {/* User Attendance Button */}
+          {!isAdmin && isScheduled && (
+            <div className="mt-8 pt-6 border-t border-slate-800 w-full">
+              {hasAttended ? (
+                <div className="flex items-center justify-center p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-400 font-medium">
+                  <CheckCircle2 className="w-5 h-5 mr-2" />
+                  Presença Confirmada
+                </div>
+              ) : (
+                <button
+                  onClick={handleMarkAttendance}
+                  disabled={markingAttendance}
+                  className="w-full py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-cyan-500 hover:bg-cyan-600 text-white disabled:opacity-50"
+                >
+                  {markingAttendance ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-current"></div>
+                  ) : (
+                    <>
+                      <UserCheck className="w-5 h-5" />
+                      Marcar Presença
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+
           {isAdmin && (
             <div className="mt-8 pt-6 border-t border-slate-800 w-full">
               <button
@@ -185,42 +247,75 @@ export const Meetings: React.FC = () => {
           )}
         </div>
 
-        {/* Settings Card (Admin Only) */}
-        {isAdmin && (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-            <div className="flex items-center gap-2 mb-6">
-              <Settings className="w-5 h-5 text-slate-400" />
-              <h2 className="text-lg font-semibold text-slate-200">Configurações</h2>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">
-                  Dia Padrão da Reunião
-                </label>
-                <p className="text-sm text-slate-500 mb-4">
-                  Defina o dia da semana em que as reuniões normalmente ocorrem. Isso atualizará a data exibida para a equipe.
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {DAYS_OF_WEEK.map((day) => (
-                    <button
-                      key={day.value}
-                      onClick={() => handleSaveDefaultDay(day.value)}
-                      disabled={savingSettings}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors text-left ${
-                        defaultDay === day.value
-                          ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                          : 'bg-slate-950 text-slate-400 border border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      {day.label}
-                    </button>
-                  ))}
+        {/* Settings and Attendances Column */}
+        <div className="space-y-6">
+          {/* Settings Card (Admin Only) */}
+          {isAdmin && (
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <Settings className="w-5 h-5 text-slate-400" />
+                <h2 className="text-lg font-semibold text-slate-200">Configurações</h2>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">
+                    Dia Padrão da Reunião
+                  </label>
+                  <p className="text-sm text-slate-500 mb-4">
+                    Defina o dia da semana em que as reuniões normalmente ocorrem. Isso atualizará a data exibida para a equipe.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {DAYS_OF_WEEK.map((day) => (
+                      <button
+                        key={day.value}
+                        onClick={() => handleSaveDefaultDay(day.value)}
+                        disabled={savingSettings}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors text-left ${
+                          defaultDay === day.value
+                            ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                            : 'bg-slate-950 text-slate-400 border border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        {day.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Attendances List (Admin Only) */}
+          {isAdmin && isScheduled && (
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-cyan-400" />
+                  <h2 className="text-lg font-semibold text-slate-200">Presenças Confirmadas</h2>
+                </div>
+                <span className="bg-slate-800 text-cyan-400 px-3 py-1 rounded-full text-sm font-bold">
+                  {attendances.length}
+                </span>
+              </div>
+              
+              {attendances.length === 0 ? (
+                <p className="text-slate-500 text-center py-4">Ninguém marcou presença ainda.</p>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+                  {attendances.map((att) => (
+                    <div key={att.id} className="flex items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-lg">
+                      <span className="font-medium text-slate-200">{att.name}</span>
+                      <span className="text-xs text-slate-500">
+                        {new Date(att.markedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
