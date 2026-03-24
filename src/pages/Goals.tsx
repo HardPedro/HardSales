@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, onSnapshot, addDoc, orderBy, where } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, orderBy, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Flag, CheckCircle, Clock, Trophy, Users, User } from 'lucide-react';
+import { Plus, Flag, CheckCircle, Clock, Trophy, Users, User, Edit, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -18,6 +18,7 @@ export const Goals: React.FC = () => {
     type: 'individual',
     rewardValue: ''
   });
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userData) return;
@@ -46,28 +47,67 @@ export const Goals: React.FC = () => {
     return unsubscribe;
   }, [userData]);
 
-  const handleAddGoal = async (e: React.FormEvent) => {
+  const handleAddOrEditGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userData || userData.role !== 'admin') return;
 
     try {
-      await addDoc(collection(db, 'goals'), {
-        title: newGoal.title,
-        targetValue: Number(newGoal.targetValue),
-        currentValue: 0,
-        deadline: new Date(newGoal.deadline).toISOString(),
-        userId: '',
-        teamId: '',
-        type: newGoal.type,
-        rewardValue: Number(newGoal.rewardValue) || 0,
-        status: 'pending',
-        createdAt: new Date().toISOString()
-      });
+      if (editingGoalId) {
+        await updateDoc(doc(db, 'goals', editingGoalId), {
+          title: newGoal.title,
+          targetValue: Number(newGoal.targetValue),
+          deadline: new Date(newGoal.deadline).toISOString(),
+          type: newGoal.type,
+          rewardValue: Number(newGoal.rewardValue) || 0,
+        });
+      } else {
+        await addDoc(collection(db, 'goals'), {
+          title: newGoal.title,
+          targetValue: Number(newGoal.targetValue),
+          currentValue: 0,
+          deadline: new Date(newGoal.deadline).toISOString(),
+          userId: '',
+          teamId: '',
+          type: newGoal.type,
+          rewardValue: Number(newGoal.rewardValue) || 0,
+          status: 'pending',
+          createdAt: new Date().toISOString()
+        });
+      }
       setIsModalOpen(false);
       setNewGoal({ title: '', targetValue: '', deadline: '', type: 'individual', rewardValue: '' });
+      setEditingGoalId(null);
     } catch (error) {
-      console.error("Error adding goal:", error);
+      console.error("Error saving goal:", error);
     }
+  };
+
+  const handleEditClick = (goal: any) => {
+    setNewGoal({ 
+      title: goal.title, 
+      targetValue: goal.targetValue.toString(), 
+      deadline: goal.deadline ? new Date(goal.deadline).toISOString().split('T')[0] : '',
+      type: goal.type || 'individual',
+      rewardValue: goal.rewardValue ? goal.rewardValue.toString() : ''
+    });
+    setEditingGoalId(goal.id);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteClick = async (goalId: string) => {
+    if (window.confirm('Tem certeza que deseja excluir esta meta?')) {
+      try {
+        await deleteDoc(doc(db, 'goals', goalId));
+      } catch (error) {
+        console.error("Error deleting goal:", error);
+      }
+    }
+  };
+
+  const openNewModal = () => {
+    setNewGoal({ title: '', targetValue: '', deadline: '', type: 'individual', rewardValue: '' });
+    setEditingGoalId(null);
+    setIsModalOpen(true);
   };
 
   if (loading) return <div className="text-slate-400">Carregando metas...</div>;
@@ -78,7 +118,7 @@ export const Goals: React.FC = () => {
         <h1 className="text-2xl font-bold text-slate-100">Metas</h1>
         {userData?.role === 'admin' && (
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={openNewModal}
             className="flex items-center px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-500 transition-colors shadow-[0_0_10px_rgba(8,145,178,0.3)] w-full sm:w-auto justify-center"
           >
             <Plus className="w-5 h-5 mr-2" />
@@ -112,6 +152,16 @@ export const Goals: React.FC = () => {
                       <Trophy className="w-3.5 h-3.5 mr-1.5" />
                       R$ {goal.rewardValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
+                  )}
+                  {userData?.role === 'admin' && (
+                    <div className="flex gap-2 mt-1">
+                      <button onClick={() => handleEditClick(goal)} className="text-slate-500 hover:text-cyan-400 transition-colors p-1">
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => handleDeleteClick(goal.id)} className="text-slate-500 hover:text-red-400 transition-colors p-1">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -161,8 +211,8 @@ export const Goals: React.FC = () => {
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-md border border-slate-800 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-6 text-slate-100">Nova Meta</h2>
-            <form onSubmit={handleAddGoal} className="space-y-5">
+            <h2 className="text-xl font-bold mb-6 text-slate-100">{editingGoalId ? 'Editar Meta' : 'Nova Meta'}</h2>
+            <form onSubmit={handleAddOrEditGoal} className="space-y-5">
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Título da Meta</label>
                 <input
@@ -235,7 +285,7 @@ export const Goals: React.FC = () => {
                   type="submit"
                   className="px-4 py-2 text-slate-950 font-semibold bg-cyan-400 hover:bg-cyan-300 rounded-lg transition-colors shadow-[0_0_10px_rgba(34,211,238,0.2)] w-full sm:w-auto order-1 sm:order-2"
                 >
-                  Salvar Meta
+                  {editingGoalId ? 'Salvar Alterações' : 'Salvar Meta'}
                 </button>
               </div>
             </form>

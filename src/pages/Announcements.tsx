@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Megaphone, Plus, Trash2, Clock } from 'lucide-react';
+import { Megaphone, Plus, Trash2, Clock, Edit } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -19,6 +19,8 @@ export const Announcements: React.FC = () => {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -42,27 +44,44 @@ export const Announcements: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  const handleAddAnnouncement = async (e: React.FormEvent) => {
+  const handleAddOrEditAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || !newContent.trim() || !userData) return;
 
     setSubmitting(true);
     try {
-      await addDoc(collection(db, 'announcements'), {
-        title: newTitle.trim(),
-        content: newContent.trim(),
-        createdAt: new Date().toISOString(),
-        createdBy: userData.name
-      });
+      if (isEditing && editingId) {
+        await updateDoc(doc(db, 'announcements', editingId), {
+          title: newTitle.trim(),
+          content: newContent.trim(),
+        });
+      } else {
+        await addDoc(collection(db, 'announcements'), {
+          title: newTitle.trim(),
+          content: newContent.trim(),
+          createdAt: new Date().toISOString(),
+          createdBy: userData.name
+        });
+      }
       setNewTitle('');
       setNewContent('');
       setIsAdding(false);
+      setIsEditing(false);
+      setEditingId(null);
     } catch (error) {
-      console.error("Error adding announcement:", error);
-      alert("Erro ao adicionar anúncio.");
+      console.error("Error saving announcement:", error);
+      alert("Erro ao salvar anúncio.");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleEditClick = (announcement: Announcement) => {
+    setNewTitle(announcement.title);
+    setNewContent(announcement.content);
+    setEditingId(announcement.id);
+    setIsEditing(true);
+    setIsAdding(true);
   };
 
   const handleDelete = async (id: string) => {
@@ -107,8 +126,8 @@ export const Announcements: React.FC = () => {
 
       {isAdding && isAdmin && (
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-slate-200 mb-4">Criar Novo Anúncio</h2>
-          <form onSubmit={handleAddAnnouncement} className="space-y-4">
+          <h2 className="text-lg font-semibold text-slate-200 mb-4">{isEditing ? 'Editar Anúncio' : 'Criar Novo Anúncio'}</h2>
+          <form onSubmit={handleAddOrEditAnnouncement} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-400 mb-1">Título</label>
               <input
@@ -134,7 +153,13 @@ export const Announcements: React.FC = () => {
             <div className="flex justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setIsAdding(false)}
+                onClick={() => {
+                  setIsAdding(false);
+                  setIsEditing(false);
+                  setEditingId(null);
+                  setNewTitle('');
+                  setNewContent('');
+                }}
                 className="px-4 py-2 text-slate-400 hover:text-slate-200 transition-colors"
               >
                 Cancelar
@@ -144,7 +169,7 @@ export const Announcements: React.FC = () => {
                 disabled={submitting}
                 className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg transition-colors disabled:opacity-50"
               >
-                {submitting ? 'Publicando...' : 'Publicar Anúncio'}
+                {submitting ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Publicar Anúncio')}
               </button>
             </div>
           </form>
@@ -161,15 +186,24 @@ export const Announcements: React.FC = () => {
           announcements.map((announcement) => (
             <div key={announcement.id} className="bg-slate-900 border border-slate-800 rounded-xl p-6 relative group">
               {isAdmin && (
-                <button
-                  onClick={() => handleDelete(announcement.id)}
-                  className="absolute top-4 right-4 p-2 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                  title="Excluir anúncio"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => handleEditClick(announcement)}
+                    className="p-2 text-slate-500 hover:text-cyan-400 hover:bg-cyan-400/10 rounded-lg transition-colors"
+                    title="Editar anúncio"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(announcement.id)}
+                    className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                    title="Excluir anúncio"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               )}
-              <h3 className="text-xl font-semibold text-slate-200 mb-2 pr-10">{announcement.title}</h3>
+              <h3 className="text-xl font-semibold text-slate-200 mb-2 pr-20">{announcement.title}</h3>
               <p className="text-slate-300 whitespace-pre-wrap mb-4">{announcement.content}</p>
               <div className="flex items-center text-sm text-slate-500 gap-4">
                 <span className="flex items-center gap-1">

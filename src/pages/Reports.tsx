@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, onSnapshot, addDoc, updateDoc, doc, orderBy, where, getDoc, setDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, updateDoc, doc, orderBy, where, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, FileText, CheckCircle, XCircle, Clock, Calendar as CalendarIcon, Phone, Users, DollarSign, Settings, Image as ImageIcon } from 'lucide-react';
+import { Plus, FileText, CheckCircle, XCircle, Clock, Calendar as CalendarIcon, Phone, Users, DollarSign, Settings, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameDay, isAfter, startOfDay, startOfWeek, endOfWeek, isWithinInterval, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -156,6 +156,16 @@ export const Reports: React.FC = () => {
       setIsQuotasModalOpen(false);
     } catch (error) {
       console.error("Error updating quotas:", error);
+    }
+  };
+
+  const handleDeleteReport = async (reportId: string) => {
+    if (!window.confirm("Tem certeza que deseja excluir este relatório?")) return;
+    try {
+      await deleteDoc(doc(db, 'reports', reportId));
+    } catch (error) {
+      console.error("Error deleting report:", error);
+      alert("Erro ao excluir relatório.");
     }
   };
 
@@ -375,6 +385,15 @@ export const Reports: React.FC = () => {
                       <h3 className="font-bold text-slate-200">{report.userName}</h3>
                       <p className="text-xs text-slate-500">{format(new Date(report.createdAt), "HH:mm")}</p>
                     </div>
+                    {userData?.role === 'admin' && (
+                      <button
+                        onClick={() => handleDeleteReport(report.id)}
+                        className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                        title="Excluir relatório"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
