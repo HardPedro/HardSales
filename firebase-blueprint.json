@@ -1,0 +1,148 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the system (admin or salesperson)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "teamId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "name", "role", "createdAt"]
+    },
+    "Team": {
+      "title": "Team",
+      "description": "A sales team",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "createdAt"]
+    },
+    "Objective": {
+      "title": "Objective",
+      "description": "General company or team objective",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "targetDate": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "createdAt"]
+    },
+    "Goal": {
+      "title": "Goal",
+      "description": "Individual or team goal",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "teamId": { "type": "string" },
+        "title": { "type": "string" },
+        "targetValue": { "type": "number" },
+        "currentValue": { "type": "number" },
+        "deadline": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "enum": ["individual", "team", "general"] },
+        "rewardValue": { "type": "number" },
+        "assignedTo": { "type": "string" }
+      },
+      "required": ["title", "targetValue", "currentValue", "deadline", "status", "createdAt"]
+    },
+    "StudyMaterial": {
+      "title": "Study Material",
+      "description": "Material sent by admin for study",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "type": { "type": "string", "enum": ["pdf", "link", "video"] },
+        "url": { "type": "string" },
+        "deadline": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "type", "url", "deadline", "createdAt"]
+    },
+    "StudyConfirmation": {
+      "title": "Study Confirmation",
+      "description": "Record of a user confirming study material consumption",
+      "type": "object",
+      "properties": {
+        "materialId": { "type": "string" },
+        "userId": { "type": "string" },
+        "confirmedAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["on_time", "late"] }
+      },
+      "required": ["materialId", "userId", "confirmedAt", "status"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "Periodic report sent by user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "date": { "type": "string" },
+        "calls": { "type": "number" },
+        "approaches": { "type": "number" },
+        "proofUrl": { "type": "string" },
+        "proofUrls": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "date", "calls", "approaches", "createdAt"]
+    },
+    "Log": {
+      "title": "Log",
+      "description": "System action log",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "action", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles"
+    },
+    "/teams/{teamId}": {
+      "schema": { "$ref": "#/entities/Team" },
+      "description": "Sales teams"
+    },
+    "/objectives/{objectiveId}": {
+      "schema": { "$ref": "#/entities/Objective" },
+      "description": "Company objectives"
+    },
+    "/goals/{goalId}": {
+      "schema": { "$ref": "#/entities/Goal" },
+      "description": "Individual and team goals"
+    },
+    "/study_materials/{materialId}": {
+      "schema": { "$ref": "#/entities/StudyMaterial" },
+      "description": "Study materials"
+    },
+    "/study_confirmations/{confirmationId}": {
+      "schema": { "$ref": "#/entities/StudyConfirmation" },
+      "description": "Study confirmations by users"
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/Report" },
+      "description": "User reports"
+    },
+    "/logs/{logId}": {
+      "schema": { "$ref": "#/entities/Log" },
+      "description": "System logs"
+    }
+  }
+}

@@ -1,0 +1,256 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        ('email' in request.auth.token && request.auth.token.email == "pedrohardsolu2025@gmail.com") ||
+        ('email' in request.auth.token && request.auth.token.email == "harddisk@salesmanager.local") ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+             request.resource.data[field].size() >= minLen &&
+             request.resource.data[field].size() <= maxLen;
+    }
+
+    function isValidUsername(username) {
+      return username is string && username.matches("^[a-zA-Z0-9_.-]+$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser() {
+      return hasRequiredFields(['uid', 'username', 'name', 'role', 'createdAt']) &&
+             isValidStringLength('uid', 1, 128) &&
+             isValidUsername(request.resource.data.username) &&
+             isValidStringLength('name', 0, 100) &&
+             request.resource.data.role in ['admin', 'user'] &&
+             request.resource.data.createdAt is string &&
+             (!('teamId' in request.resource.data) || request.resource.data.teamId == null || request.resource.data.teamId is string);
+    }
+
+    function isValidTeam() {
+      return hasRequiredFields(['name', 'createdAt']) &&
+             isValidStringLength('name', 1, 100) &&
+             request.resource.data.createdAt is string &&
+             (!('description' in request.resource.data) || request.resource.data.description is string);
+    }
+
+    function isValidObjective() {
+      return hasRequiredFields(['title', 'createdAt']) &&
+             isValidStringLength('title', 1, 200) &&
+             request.resource.data.createdAt is string &&
+             (!('description' in request.resource.data) || request.resource.data.description is string) &&
+             (!('targetDate' in request.resource.data) || request.resource.data.targetDate is string);
+    }
+
+    function isValidGoal() {
+      return hasRequiredFields(['title', 'targetValue', 'currentValue', 'deadline', 'status', 'createdAt']) &&
+             isValidStringLength('title', 1, 200) &&
+             request.resource.data.targetValue is number &&
+             request.resource.data.currentValue is number &&
+             request.resource.data.deadline is string &&
+             request.resource.data.status in ['pending', 'completed', 'failed'] &&
+             request.resource.data.createdAt is string &&
+             (!('userId' in request.resource.data) || request.resource.data.userId is string) &&
+             (!('teamId' in request.resource.data) || request.resource.data.teamId is string) &&
+             (!('rewardValue' in request.resource.data) || request.resource.data.rewardValue is number) &&
+             (!('type' in request.resource.data) || request.resource.data.type in ['individual', 'team', 'general']) &&
+             (!('assignedTo' in request.resource.data) || request.resource.data.assignedTo is string);
+    }
+
+    function isValidStudyMaterial() {
+      return hasRequiredFields(['title', 'deadline', 'createdAt']) &&
+             isValidStringLength('title', 1, 200) &&
+             request.resource.data.deadline is string &&
+             request.resource.data.createdAt is string &&
+             (!('description' in request.resource.data) || request.resource.data.description is string) &&
+             (!('link' in request.resource.data) || request.resource.data.link is string) &&
+             (!('confirmedBy' in request.resource.data) || request.resource.data.confirmedBy is list);
+    }
+
+    function isValidStudyConfirmation() {
+      return hasRequiredFields(['materialId', 'userId', 'username', 'summary', 'createdAt']) &&
+             request.resource.data.materialId is string &&
+             request.resource.data.userId is string &&
+             request.resource.data.username is string &&
+             request.resource.data.summary is string &&
+             request.resource.data.createdAt is string;
+    }
+
+    function isValidReport() {
+      return hasRequiredFields(['userId', 'userName', 'date', 'calls', 'approaches', 'createdAt']) &&
+             request.resource.data.userId is string &&
+             request.resource.data.userName is string &&
+             request.resource.data.date is string &&
+             request.resource.data.calls is number &&
+             request.resource.data.approaches is number &&
+             (
+               ('proofUrl' in request.resource.data && request.resource.data.proofUrl is string && request.resource.data.proofUrl.size() > 0) ||
+               ('proofUrls' in request.resource.data && request.resource.data.proofUrls is list && request.resource.data.proofUrls.size() > 0 && request.resource.data.proofUrls.size() <= 10)
+             ) &&
+             request.resource.data.createdAt is string;
+    }
+
+    function isValidLog() {
+      return hasRequiredFields(['userId', 'action', 'createdAt']) &&
+             request.resource.data.userId is string &&
+             request.resource.data.action is string &&
+             request.resource.data.createdAt is string &&
+             (!('details' in request.resource.data) || request.resource.data.details is string);
+    }
+
+    function isValidAnnouncement() {
+      return hasRequiredFields(['title', 'content', 'createdAt', 'createdBy']) &&
+             isValidStringLength('title', 1, 200) &&
+             request.resource.data.content is string &&
+             request.resource.data.createdAt is string &&
+             request.resource.data.createdBy is string;
+    }
+
+    function isValidMeeting() {
+      return hasRequiredFields(['date', 'status', 'createdAt', 'createdBy']) &&
+             request.resource.data.date is string &&
+             request.resource.data.status in ['scheduled', 'cancelled'] &&
+             request.resource.data.createdAt is string &&
+             request.resource.data.createdBy is string;
+    }
+
+    function isValidAccessRequest() {
+      return hasRequiredFields(['uid', 'name', 'username', 'status', 'createdAt']) &&
+             request.resource.data.uid is string &&
+             request.resource.data.name is string &&
+             request.resource.data.username is string &&
+             request.resource.data.status in ['pending', 'approved', 'rejected'] &&
+             request.resource.data.createdAt is string &&
+             (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is string);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidUser() && (
+        isAdmin() || 
+        (uidUnchanged() && isOwner(userId) && request.resource.data.role == 'user') ||
+        (uidUnchanged() && isOwner(userId) && 'email' in request.auth.token && request.auth.token.email == 'pedrohardsolu2025@gmail.com' && request.resource.data.role == 'admin') ||
+        (uidUnchanged() && isOwner(userId) && 'email' in request.auth.token && request.auth.token.email == 'harddisk@salesmanager.local' && request.resource.data.role == 'admin')
+      );
+      allow update: if isAuthenticated() && isValidUser() && uidNotModified() && (isAdmin() || (isOwner(userId) && request.resource.data.role == resource.data.role));
+      allow delete: if isAdmin();
+    }
+
+    match /teams/{teamId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidTeam();
+      allow update: if isAdmin() && isValidTeam();
+      allow delete: if isAdmin();
+    }
+
+    match /objectives/{objectiveId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidObjective();
+      allow update: if isAdmin() && isValidObjective();
+      allow delete: if isAdmin();
+    }
+
+    match /goals/{goalId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidGoal();
+      allow update: if isAuthenticated() && isValidGoal() && (isAdmin() || (isOwner(resource.data.userId) && request.resource.data.targetValue == resource.data.targetValue && request.resource.data.deadline == resource.data.deadline));
+      allow delete: if isAdmin();
+    }
+
+    match /studyMaterials/{materialId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidStudyMaterial();
+      allow update: if isAuthenticated() && isValidStudyMaterial() && (
+        isAdmin() || 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['confirmedBy'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /settings/{document} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /studyConfirmations/{confirmationId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidStudyConfirmation() && isOwner(request.resource.data.userId);
+      allow update: if isAdmin() && isValidStudyConfirmation();
+      allow delete: if isAdmin();
+    }
+
+    match /reports/{reportId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidReport() && isOwner(request.resource.data.userId);
+      allow update: if isAdmin() && isValidReport();
+      allow delete: if isAdmin();
+    }
+
+    match /logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() && isValidLog() && isOwner(request.resource.data.userId);
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidAnnouncement();
+      allow update: if isAdmin() && isValidAnnouncement();
+      allow delete: if isAdmin();
+    }
+
+    match /meetings/{meetingId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidMeeting();
+      allow update: if isAdmin() && isValidMeeting();
+      allow delete: if isAdmin();
+    }
+
+    match /access_requests/{requestId} {
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == requestId);
+      allow create: if isAuthenticated() && isValidAccessRequest() && request.auth.uid == request.resource.data.uid;
+      allow update: if isAdmin() && isValidAccessRequest();
+      allow delete: if isAdmin();
+    }
+  }
+}
