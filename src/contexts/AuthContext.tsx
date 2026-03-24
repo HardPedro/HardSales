@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
 interface UserData {
@@ -31,11 +31,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    let unsubscribeDoc: () => void;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       if (user) {
-        try {
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
+        unsubscribeDoc = onSnapshot(doc(db, 'users', user.uid), (userDoc) => {
           if (userDoc.exists()) {
             setUserData(userDoc.data() as UserData);
           } else {
@@ -51,17 +52,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setUserData(null);
             }
           }
-        } catch (error) {
+          setLoading(false);
+        }, (error) => {
           console.error("Error fetching user data:", error);
           setUserData(null);
-        }
+          setLoading(false);
+        });
       } else {
         setUserData(null);
+        setLoading(false);
+        if (unsubscribeDoc) {
+          unsubscribeDoc();
+        }
       }
-      setLoading(false);
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeDoc) {
+        unsubscribeDoc();
+      }
+    };
   }, []);
 
   return (

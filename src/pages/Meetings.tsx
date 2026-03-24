@@ -240,57 +240,83 @@ export const Meetings: React.FC = () => {
 
           {isAdmin && (
             <div className="mt-8 pt-6 border-t border-slate-800 w-full">
-              {!isScheduled && (
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-400 mb-2 text-left">
-                      Horário de Início
-                    </label>
-                    <input
-                      type="time"
-                      value={startTime}
-                      onChange={(e) => setStartTime(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-slate-200 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-400 mb-2 text-left">
-                      Duração (minutos)
-                    </label>
-                    <input
-                      type="number"
-                      min="15"
-                      step="15"
-                      value={duration}
-                      onChange={(e) => setDuration(Number(e.target.value))}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-slate-200 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
-                    />
-                  </div>
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2 text-left">
+                    Horário de Início
+                  </label>
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-slate-200 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                  />
                 </div>
-              )}
-              <button
-                onClick={handleToggleMeeting}
-                disabled={scheduling}
-                className={`w-full py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                  isScheduled 
-                    ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20' 
-                    : 'bg-cyan-500 hover:bg-cyan-600 text-white'
-                } disabled:opacity-50`}
-              >
-                {scheduling ? (
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-current"></div>
-                ) : isScheduled ? (
-                  <>
-                    <XCircle className="w-5 h-5" />
-                    Cancelar Reunião
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-5 h-5" />
-                    Marcar Reunião
-                  </>
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2 text-left">
+                    Duração (minutos)
+                  </label>
+                  <input
+                    type="number"
+                    min="15"
+                    step="15"
+                    value={duration}
+                    onChange={(e) => setDuration(Number(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-slate-200 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                {isScheduled && (
+                  <button
+                    onClick={async () => {
+                      if (!isAdmin || !userData) return;
+                      setScheduling(true);
+                      try {
+                        const meetingRef = doc(db, 'meetings', meetingDateString);
+                        await setDoc(meetingRef, {
+                          startTime,
+                          duration
+                        }, { merge: true });
+                        alert("Reunião atualizada com sucesso!");
+                      } catch (error) {
+                        console.error("Error updating meeting:", error);
+                        alert("Erro ao atualizar reunião.");
+                      } finally {
+                        setScheduling(false);
+                      }
+                    }}
+                    disabled={scheduling}
+                    className="flex-1 py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-50"
+                  >
+                    Atualizar
+                  </button>
                 )}
-              </button>
+                <button
+                  onClick={handleToggleMeeting}
+                  disabled={scheduling}
+                  className={`flex-1 py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                    isScheduled 
+                      ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20' 
+                      : 'bg-cyan-500 hover:bg-cyan-600 text-white'
+                  } disabled:opacity-50`}
+                >
+                  {scheduling ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-current"></div>
+                  ) : isScheduled ? (
+                    <>
+                      <XCircle className="w-5 h-5" />
+                      Cancelar
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-5 h-5" />
+                      Marcar Reunião
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           )}
         </div>

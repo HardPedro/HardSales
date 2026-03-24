@@ -4,8 +4,10 @@ import { doc, setDoc, getDoc, collection, addDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Shield, UserPlus, LogIn } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 export const Login: React.FC = () => {
+  const { currentUser, userData, loading: authLoading } = useAuth();
   const [isRequestingAccess, setIsRequestingAccess] = useState(false);
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
@@ -17,6 +19,12 @@ export const Login: React.FC = () => {
   const location = useLocation();
 
   const from = location.state?.from?.pathname || '/';
+
+  React.useEffect(() => {
+    if (!authLoading && currentUser && userData) {
+      navigate(from, { replace: true });
+    }
+  }, [currentUser, userData, authLoading, navigate, from]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,7 +95,8 @@ export const Login: React.FC = () => {
         }
       }
       
-      navigate(from, { replace: true });
+      // Navigation is handled by the useEffect watching auth state
+      // Do not set loading to false here, let the component unmount
     } catch (err: any) {
       // Auto-bootstrap default admin if it doesn't exist in Auth yet
       if (username.trim() === 'harddisk' && password === 'harddisk8inh' && err.code === 'auth/invalid-credential') {
@@ -100,7 +109,8 @@ export const Login: React.FC = () => {
             role: 'admin',
             createdAt: new Date().toISOString()
           });
-          navigate(from, { replace: true });
+          // Navigation is handled by the useEffect watching auth state
+          // Do not set loading to false here, let the component unmount
           return;
         } catch (createErr: any) {
           console.error("Erro ao criar admin padrão:", createErr);
@@ -109,15 +119,23 @@ export const Login: React.FC = () => {
           } else {
             setError('Erro ao criar a conta de administrador padrão.');
           }
+          setLoading(false);
         }
       } else {
         setError('Usuário ou senha incorretos.');
         console.error(err);
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
     }
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-cyan-500"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-950 py-12 px-4 sm:px-6 lg:px-8">
