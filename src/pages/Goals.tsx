@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, orderBy, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Flag, CheckCircle, Clock, Trophy, Users, User, Edit, Trash2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { Plus, Flag, CheckCircle, Clock, Trophy, Users, User, Edit, Trash2, AlertTriangle } from 'lucide-react';
+import { format, differenceInHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export const Goals: React.FC = () => {
@@ -31,7 +31,7 @@ export const Goals: React.FC = () => {
       if (userData.role === 'admin') {
         setGoals(allGoals);
       } else {
-        setGoals(allGoals.filter(g => 
+        setGoals(allGoals.filter((g: any) => 
           g.type === 'general' || 
           g.type === 'team' || 
           g.type === 'individual' ||
@@ -131,21 +131,33 @@ export const Goals: React.FC = () => {
         {goals.map((goal) => {
           const progress = Math.min((goal.currentValue / goal.targetValue) * 100, 100);
           const isCompleted = progress >= 100;
+          
+          const hoursToDeadline = differenceInHours(new Date(goal.deadline), new Date());
+          const isUrgent = !isCompleted && hoursToDeadline > 0 && hoursToDeadline <= 12;
 
           return (
-            <div key={goal.id} className="bg-slate-900 p-6 rounded-2xl shadow-lg border border-slate-800 flex flex-col hover:border-slate-700 transition-colors group">
+            <div key={goal.id} className={`bg-slate-900 p-6 rounded-2xl shadow-lg border flex flex-col transition-colors group ${
+              isUrgent ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'border-slate-800 hover:border-slate-700'
+            }`}>
               <div className="flex items-start justify-between mb-4">
                 <div className={`p-3 rounded-xl border transition-colors ${
                   isCompleted 
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 group-hover:bg-emerald-500/20' 
+                    : isUrgent
+                    ? 'bg-red-500/10 text-red-400 border-red-500/20 group-hover:bg-red-500/20'
                     : 'bg-purple-500/10 text-purple-400 border-purple-500/20 group-hover:bg-purple-500/20'
                 }`}>
-                  {isCompleted ? <CheckCircle className="w-6 h-6" /> : <Flag className="w-6 h-6" />}
+                  {isCompleted ? <CheckCircle className="w-6 h-6" /> : isUrgent ? <AlertTriangle className="w-6 h-6 animate-pulse" /> : <Flag className="w-6 h-6" />}
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <span className="flex items-center text-xs font-medium text-slate-400 bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-full">
-                    <Clock className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
+                  <span className={`flex items-center text-xs font-medium px-3 py-1.5 rounded-full border ${
+                    isUrgent 
+                      ? 'text-red-400 bg-red-950/50 border-red-500/30 animate-pulse' 
+                      : 'text-slate-400 bg-slate-950 border-slate-800'
+                  }`}>
+                    <Clock className={`w-3.5 h-3.5 mr-1.5 ${isUrgent ? 'text-red-400' : 'text-slate-500'}`} />
                     {format(new Date(goal.deadline), "dd/MM/yyyy")}
+                    {isUrgent && <span className="ml-1 font-bold">({hoursToDeadline}h)</span>}
                   </span>
                   {goal.rewardValue > 0 && (
                     <span className="flex items-center text-xs font-bold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-3 py-1.5 rounded-full">

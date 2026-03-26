@@ -4,13 +4,13 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Plus, FileText, CheckCircle, XCircle, Clock, Calendar as CalendarIcon, Phone, Users, DollarSign, Settings, Image as ImageIcon, Trash2 } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameDay, isAfter, startOfDay, startOfWeek, endOfWeek, isWithinInterval, parseISO } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameDay, isAfter, startOfDay, startOfWeek, endOfWeek, isWithinInterval, parseISO, isWeekend, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export const Reports: React.FC = () => {
   const { userData } = useAuth();
   const [reports, setReports] = useState<any[]>([]);
-  const [quotas, setQuotas] = useState({ calls: 0, approaches: 0 });
+  const [quotas, setQuotas] = useState({ calls: 0, approaches: 0, updatedAt: '' });
   const [loading, setLoading] = useState(true);
   
   // Modals
@@ -36,7 +36,7 @@ export const Reports: React.FC = () => {
         const docRef = doc(db, 'settings', 'quotas');
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          setQuotas(docSnap.data() as { calls: number, approaches: number });
+          setQuotas(docSnap.data() as { calls: number, approaches: number, updatedAt?: string });
         }
       } catch (error) {
         console.error("Error fetching quotas:", error);
@@ -149,7 +149,8 @@ export const Reports: React.FC = () => {
     try {
       const updatedQuotas = {
         calls: Number(newQuotas.calls) || 0,
-        approaches: Number(newQuotas.approaches) || 0
+        approaches: Number(newQuotas.approaches) || 0,
+        updatedAt: new Date().toISOString()
       };
       await setDoc(doc(db, 'settings', 'quotas'), updatedQuotas);
       setQuotas(updatedQuotas);
@@ -206,6 +207,36 @@ export const Reports: React.FC = () => {
   });
   const weeklyCalls = weeklyUserReports.reduce((sum, r) => sum + r.calls, 0);
   const weeklyApproaches = weeklyUserReports.reduce((sum, r) => sum + r.approaches, 0);
+
+  // Calculate Weekly Quota Multiplier based on when the quota was established
+  const calculateWeeklyQuotaMultiplier = (date: Date, quotaUpdatedAt?: string) => {
+    const wStart = startOfWeek(date, { weekStartsOn: 1 }); // Monday
+    let effectiveStart = wStart;
+    
+    if (quotaUpdatedAt) {
+      const updatedDate = startOfDay(parseISO(quotaUpdatedAt));
+      if (isAfter(updatedDate, wStart)) {
+        effectiveStart = updatedDate;
+      }
+    }
+    
+    let days = 0;
+    let currentDay = effectiveStart;
+    const friday = addDays(wStart, 4); // Monday + 4 = Friday
+    
+    while (!isAfter(currentDay, friday)) {
+      if (!isWeekend(currentDay)) {
+        days++;
+      }
+      currentDay = addDays(currentDay, 1);
+    }
+    
+    return days;
+  };
+
+  const weeklyMultiplier = calculateWeeklyQuotaMultiplier(selectedDate, quotas.updatedAt);
+  const weeklyCallsTarget = quotas.calls * weeklyMultiplier;
+  const weeklyApproachesTarget = quotas.approaches * weeklyMultiplier;
 
   const renderProgress = (current: number, target: number, type: 'daily' | 'weekly', colorClass: string, bgClass: string) => {
     const percent = target > 0 ? Math.min((current / target) * 100, 100) : 0;
@@ -280,13 +311,13 @@ export const Reports: React.FC = () => {
             </div>
             <div className="text-right border-l border-slate-800 pl-6">
               <p className="text-xs font-medium text-slate-500">Meta Semanal</p>
-              <p className="text-lg font-bold text-blue-400 mt-1">{quotas.calls * 5}</p>
+              <p className="text-lg font-bold text-blue-400 mt-1">{weeklyCallsTarget}</p>
             </div>
           </div>
           <div className="pt-4 border-t border-slate-800/50">
             <p className="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">Seu Progresso</p>
             {renderProgress(dailyCalls, quotas.calls, 'daily', 'blue', 'bg-blue-500')}
-            {renderProgress(weeklyCalls, quotas.calls * 5, 'weekly', 'blue', 'bg-blue-500')}
+            {renderProgress(weeklyCalls, weeklyCallsTarget, 'weekly', 'blue', 'bg-blue-500')}
           </div>
         </div>
         
@@ -303,13 +334,13 @@ export const Reports: React.FC = () => {
             </div>
             <div className="text-right border-l border-slate-800 pl-6">
               <p className="text-xs font-medium text-slate-500">Meta Semanal</p>
-              <p className="text-lg font-bold text-purple-400 mt-1">{quotas.approaches * 5}</p>
+              <p className="text-lg font-bold text-purple-400 mt-1">{weeklyApproachesTarget}</p>
             </div>
           </div>
           <div className="pt-4 border-t border-slate-800/50">
             <p className="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">Seu Progresso</p>
             {renderProgress(dailyApproaches, quotas.approaches, 'daily', 'purple', 'bg-purple-500')}
-            {renderProgress(weeklyApproaches, quotas.approaches * 5, 'weekly', 'purple', 'bg-purple-500')}
+            {renderProgress(weeklyApproaches, weeklyApproachesTarget, 'weekly', 'purple', 'bg-purple-500')}
           </div>
         </div>
       </div>

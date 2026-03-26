@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { collection, query, onSnapshot, doc, setDoc, updateDoc, where, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { CheckCircle, XCircle, UserPlus, TrendingUp, Phone, Users, DollarSign, Activity, AlertTriangle, ChevronRight, ArrowLeft, FileText, Trash2 } from 'lucide-react';
+import { CheckCircle, XCircle, UserPlus, TrendingUp, Phone, Users, DollarSign, Activity, AlertTriangle, ChevronRight, ArrowLeft, FileText, Trash2, Target, Calendar } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -14,6 +14,7 @@ export const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedSeller, setSelectedSeller] = useState<any | null>(null);
   const [sellerReports, setSellerReports] = useState<any[]>([]);
+  const [sellerLeads, setSellerLeads] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [reportToDelete, setReportToDelete] = useState<string | null>(null);
 
@@ -40,11 +41,32 @@ export const AdminDashboard: React.FC = () => {
       setRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    // Fetch all users to map IDs to names
+    const qUsers = query(collection(db, 'users'));
+    let usersMap: Record<string, any> = {};
+    const unsubscribeUsers = onSnapshot(qUsers, (snapshot) => {
+      snapshot.docs.forEach(doc => {
+        usersMap[doc.data().uid] = doc.data();
+      });
+    });
+
+    // Fetch all leads
+    const qLeads = query(collection(db, 'leads'));
+    let allLeads: any[] = [];
+    const unsubscribeLeads = onSnapshot(qLeads, (snapshot) => {
+      allLeads = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      updateMetrics();
+    });
+
+    let allReports: any[] = [];
     // Fetch reports for metrics
     const qReports = query(collection(db, 'reports'));
     const unsubscribeReports = onSnapshot(qReports, (snapshot) => {
-      const allReports = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
-      
+      allReports = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+      updateMetrics();
+    });
+
+    const updateMetrics = () => {
       // Calculate metrics per user for the current month
       const now = new Date();
       const start = startOfMonth(now);
@@ -62,7 +84,8 @@ export const AdminDashboard: React.FC = () => {
               totalCalls: 0,
               totalApproaches: 0,
               reportCount: 0,
-              reports: []
+              reports: [],
+              leads: []
             };
           }
           userMetrics[report.userId].totalCalls += report.calls || 0;
@@ -72,20 +95,58 @@ export const AdminDashboard: React.FC = () => {
         }
       });
 
+      // Add leads to user metrics
+      allLeads.forEach(lead => {
+        if (lead.assignedTo) {
+          if (!userMetrics[lead.assignedTo]) {
+            // If user has leads but no reports this month, initialize them
+            userMetrics[lead.assignedTo] = {
+              userId: lead.assignedTo,
+              userName: usersMap[lead.assignedTo]?.name || 'Usuário Desconhecido',
+              totalCalls: 0,
+              totalApproaches: 0,
+              reportCount: 0,
+              reports: [],
+              leads: []
+            };
+          }
+          userMetrics[lead.assignedTo].leads.push(lead);
+        }
+      });
+
       // Sort reports for each user by date descending
       Object.values(userMetrics).forEach(user => {
         user.reports.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        // Sort leads by assignedAt descending
+        user.leads.sort((a: any, b: any) => {
+          if (!a.assignedAt) return 1;
+          if (!b.assignedAt) return -1;
+          return new Date(b.assignedAt).getTime() - new Date(a.assignedAt).getTime();
+        });
       });
 
       setMetrics(Object.values(userMetrics).sort((a, b) => b.totalApproaches - a.totalApproaches));
+      
+      // Update selected seller if open
+      if (selectedSeller) {
+        const updatedSeller = userMetrics[selectedSeller.userId];
+        if (updatedSeller) {
+          setSelectedSeller(updatedSeller);
+          setSellerReports(updatedSeller.reports);
+          setSellerLeads(updatedSeller.leads);
+        }
+      }
+      
       setLoading(false);
-    });
+    };
 
     return () => {
       unsubscribeRequests();
       unsubscribeReports();
+      unsubscribeLeads();
+      unsubscribeUsers();
     };
-  }, [userData]);
+  }, [userData, selectedSeller?.userId]);
 
   const handleApprove = async (request: any) => {
     try {
@@ -247,6 +308,47 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </div>
 
+          </div>
+
+          <h3 className="text-lg font-bold text-slate-100 mb-4 flex items-center mt-8">
+            <Target className="w-5 h-5 mr-2 text-cyan-400" />
+            Leads Assumidos ({sellerLeads.length})
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            {sellerLeads.length === 0 ? (
+              <p className="text-slate-500 col-span-full py-4">Nenhum lead assumido.</p>
+            ) : (
+              sellerLeads.map((lead) => (
+                <div key={lead.id} className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col">
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-bold text-slate-200 truncate pr-2">{lead.title}</h4>
+                    <span className={`text-xs px-2 py-1 rounded-full border ${
+                      lead.status === 'pending' ? 'bg-amber-400/10 text-amber-400 border-amber-400/20' :
+                      lead.status === 'negotiating' ? 'bg-blue-400/10 text-blue-400 border-blue-400/20' :
+                      lead.status === 'converted' ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20' :
+                      'bg-red-400/10 text-red-400 border-red-400/20'
+                    }`}>
+                      {lead.status === 'pending' ? 'Pendente' :
+                       lead.status === 'negotiating' ? 'Negociando' :
+                       lead.status === 'converted' ? 'Convertido' : 'Cancelado'}
+                    </span>
+                  </div>
+                  {lead.phone && (
+                    <div className="flex items-center text-sm text-slate-400 mb-1">
+                      <Phone className="w-3 h-3 mr-1.5" />
+                      {lead.phone}
+                    </div>
+                  )}
+                  {lead.assignedAt && (
+                    <div className="flex items-center text-xs text-slate-500 mt-auto pt-3">
+                      <Calendar className="w-3 h-3 mr-1.5" />
+                      Assumido em {format(parseISO(lead.assignedAt), "dd/MM/yyyy HH:mm")}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
 
           <h3 className="text-lg font-bold text-slate-100 mb-4 flex items-center">

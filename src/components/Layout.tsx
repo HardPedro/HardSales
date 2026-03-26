@@ -49,7 +49,7 @@ export const Layout: React.FC = () => {
   ];
 
   const adminItems = [
-    { name: 'Visão Geral', path: '/admin', icon: LayoutDashboard },
+    { name: 'Supervisão', path: '/admin', icon: LayoutDashboard },
     { name: 'Usuários', path: '/admin/users', icon: Users },
     { name: 'Equipes', path: '/admin/teams', icon: Settings },
   ];

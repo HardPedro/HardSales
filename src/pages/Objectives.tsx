@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Target, Calendar, Edit, Trash2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { Plus, Target, Calendar, Edit, Trash2, AlertTriangle } from 'lucide-react';
+import { format, differenceInHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export const Objectives: React.FC = () => {
@@ -97,16 +97,31 @@ export const Objectives: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {objectives.map((obj) => (
-          <div key={obj.id} className="bg-slate-900 p-6 rounded-2xl shadow-lg border border-slate-800 flex flex-col h-full hover:border-slate-700 transition-colors group">
+        {objectives.map((obj) => {
+          const hoursToDeadline = obj.targetDate ? differenceInHours(new Date(obj.targetDate), new Date()) : null;
+          const isUrgent = hoursToDeadline !== null && hoursToDeadline > 0 && hoursToDeadline <= 12;
+
+          return (
+          <div key={obj.id} className={`bg-slate-900 p-6 rounded-2xl shadow-lg border flex flex-col h-full transition-colors group ${
+            isUrgent ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'border-slate-800 hover:border-slate-700'
+          }`}>
             <div className="flex items-start justify-between mb-5">
-              <div className="p-3 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl group-hover:bg-blue-500/20 transition-colors">
-                <Target className="w-6 h-6" />
+              <div className={`p-3 rounded-xl transition-colors ${
+                isUrgent 
+                  ? 'bg-red-500/10 text-red-400 border border-red-500/20 group-hover:bg-red-500/20' 
+                  : 'bg-blue-500/10 text-blue-400 border border-blue-500/20 group-hover:bg-blue-500/20'
+              }`}>
+                {isUrgent ? <AlertTriangle className="w-6 h-6 animate-pulse" /> : <Target className="w-6 h-6" />}
               </div>
               <div className="flex flex-col items-end gap-2">
-                <span className="flex items-center text-xs font-medium text-slate-400 bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-full">
-                  <Calendar className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
+                <span className={`flex items-center text-xs font-medium px-3 py-1.5 rounded-full border ${
+                  isUrgent 
+                    ? 'text-red-400 bg-red-950/50 border-red-500/30 animate-pulse' 
+                    : 'text-slate-400 bg-slate-950 border-slate-800'
+                }`}>
+                  <Calendar className={`w-3.5 h-3.5 mr-1.5 ${isUrgent ? 'text-red-400' : 'text-slate-500'}`} />
                   {obj.targetDate ? format(new Date(obj.targetDate), "dd 'de' MMM, yyyy", { locale: ptBR }) : 'Sem prazo'}
+                  {isUrgent && <span className="ml-1 font-bold">({hoursToDeadline}h)</span>}
                 </span>
                 {userData?.role === 'admin' && (
                   <div className="flex gap-2">
@@ -123,7 +138,7 @@ export const Objectives: React.FC = () => {
             <h3 className="text-lg font-bold text-slate-100 mb-3">{obj.title}</h3>
             <p className="text-slate-400 text-sm flex-grow leading-relaxed">{obj.description}</p>
           </div>
-        ))}
+        )})}
         {objectives.length === 0 && (
           <div className="col-span-full text-center py-16 text-slate-500 bg-slate-900/50 rounded-2xl border border-dashed border-slate-700">
             Nenhum objetivo definido ainda.

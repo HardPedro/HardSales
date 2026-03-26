@@ -317,7 +317,7 @@ export const Leads: React.FC = () => {
     }
   };
 
-  const LeadCard = ({ lead, isMine }: { lead: any, isMine: boolean }) => (
+  const LeadCard: React.FC<{ lead: any, isMine: boolean }> = ({ lead, isMine }) => (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition-colors">
       <div className="flex justify-between items-start mb-3">
         <div>
