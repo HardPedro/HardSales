@@ -46,7 +46,7 @@ export const AdminTeams: React.FC = () => {
   };
 
   const handleEditClick = (team: any) => {
-    setNewTeam({ name: team.name, description: team.description });
+    setNewTeam({ name: team.name || '', description: team.description || '' });
     setEditingTeamId(team.id);
     setIsModalOpen(true);
   };

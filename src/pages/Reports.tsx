@@ -10,6 +10,7 @@ import { ptBR } from 'date-fns/locale';
 export const Reports: React.FC = () => {
   const { userData } = useAuth();
   const [reports, setReports] = useState<any[]>([]);
+  const [leads, setLeads] = useState<any[]>([]);
   const [quotas, setQuotas] = useState({ calls: 0, approaches: 0, updatedAt: '' });
   const [loading, setLoading] = useState(true);
   
@@ -45,21 +46,34 @@ export const Reports: React.FC = () => {
     fetchQuotas();
 
     // Fetch Reports
-    let q;
+    let qReports;
+    let qLeads;
     if (userData.role === 'admin') {
-      q = query(collection(db, 'reports'), orderBy('createdAt', 'desc'));
+      qReports = query(collection(db, 'reports'), orderBy('createdAt', 'desc'));
+      qLeads = query(collection(db, 'leads'));
     } else {
-      q = query(collection(db, 'reports'), where('userId', '==', userData.uid), orderBy('createdAt', 'desc'));
+      qReports = query(collection(db, 'reports'), where('userId', '==', userData.uid), orderBy('createdAt', 'desc'));
+      qLeads = query(collection(db, 'leads'), where('assignedTo', '==', userData.uid));
     }
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribeReports = onSnapshot(qReports, (snapshot) => {
       setReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
     }, (error) => {
       console.error("Error fetching reports:", error);
       setLoading(false);
     });
-    return unsubscribe;
+
+    const unsubscribeLeads = onSnapshot(qLeads, (snapshot) => {
+      setLeads(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Error fetching leads:", error);
+    });
+
+    return () => {
+      unsubscribeReports();
+      unsubscribeLeads();
+    };
   }, [userData]);
 
   const compressImage = (file: File): Promise<string> => {
@@ -190,6 +204,38 @@ export const Reports: React.FC = () => {
   const reportsForSelectedDate = reports.filter(r => r.date === selectedDateStr);
   const hasReportForToday = reports.some(r => r.date === format(new Date(), 'yyyy-MM-dd') && r.userId === userData?.uid);
 
+  // Filter leads for selected date (based on abordadoAt)
+  const leadsForSelectedDate = leads.filter(l => {
+    if (!l.abordadoAt) return false;
+    return format(new Date(l.abordadoAt), 'yyyy-MM-dd') === selectedDateStr;
+  });
+
+  // Group reports and leads by user for the selected date
+  const usersWithActivity = new Set([
+    ...reportsForSelectedDate.map(r => r.userId),
+    ...leadsForSelectedDate.map(l => l.assignedTo)
+  ]);
+
+  const activityData = Array.from(usersWithActivity).map(userId => {
+    const userReport = reportsForSelectedDate.find(r => r.userId === userId);
+    const userLeads = leadsForSelectedDate.filter(l => l.assignedTo === userId);
+    
+    // Try to get user name from report, or from leads
+    let userName = userReport?.userName;
+    if (!userName && userLeads.length > 0) {
+      // We don't have the user name directly in the lead, so we might just say 'Vendedor'
+      // Or we can try to find it if we have a users list, but we don't fetch users here.
+      userName = 'Vendedor (Sem Relatório Manual)'; 
+    }
+
+    return {
+      userId,
+      userName,
+      report: userReport,
+      leads: userLeads
+    };
+  });
+  
   // User Progress Calculations
   const userReports = reports.filter(r => r.userId === userData?.uid);
   
@@ -404,21 +450,21 @@ export const Reports: React.FC = () => {
           </h2>
           
           <div className="flex-1 overflow-y-auto pr-2 space-y-4">
-            {reportsForSelectedDate.length === 0 ? (
+            {activityData.length === 0 ? (
               <div className="text-center py-12 text-slate-500 border border-dashed border-slate-800 rounded-xl">
-                Nenhum relatório enviado neste dia.
+                Nenhuma atividade registrada neste dia.
               </div>
             ) : (
-              reportsForSelectedDate.map((report) => (
-                <div key={report.id} className="bg-slate-950 p-5 rounded-xl border border-slate-800">
+              activityData.map((data) => (
+                <div key={data.userId} className="bg-slate-950 p-5 rounded-xl border border-slate-800">
                   <div className="flex justify-between items-start mb-4">
                     <div>
-                      <h3 className="font-bold text-slate-200">{report.userName}</h3>
-                      <p className="text-xs text-slate-500">{format(new Date(report.createdAt), "HH:mm")}</p>
+                      <h3 className="font-bold text-slate-200">{data.userName}</h3>
+                      {data.report && <p className="text-xs text-slate-500">Relatório enviado às {format(new Date(data.report.createdAt), "HH:mm")}</p>}
                     </div>
-                    {userData?.role === 'admin' && (
+                    {userData?.role === 'admin' && data.report && (
                       <button
-                        onClick={() => handleDeleteReport(report.id)}
+                        onClick={() => handleDeleteReport(data.report.id)}
                         className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                         title="Excluir relatório"
                       >
@@ -427,55 +473,90 @@ export const Reports: React.FC = () => {
                     )}
                   </div>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="bg-slate-900 p-3 rounded-lg border border-slate-800/50">
-                      <div className="flex items-center text-xs text-slate-400 mb-1">
-                        <Phone className="w-3.5 h-3.5 mr-1.5" /> Ligações
+                  {data.report ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                      <div className="bg-slate-900 p-3 rounded-lg border border-slate-800/50">
+                        <div className="flex items-center text-xs text-slate-400 mb-1">
+                          <Phone className="w-3.5 h-3.5 mr-1.5" /> Ligações
+                        </div>
+                        <div className="flex items-end gap-2">
+                          <span className="text-lg font-bold text-slate-200">{data.report.calls}</span>
+                          <span className="text-xs text-slate-500 mb-1">/ {quotas.calls}</span>
+                        </div>
                       </div>
-                      <div className="flex items-end gap-2">
-                        <span className="text-lg font-bold text-slate-200">{report.calls}</span>
-                        <span className="text-xs text-slate-500 mb-1">/ {quotas.calls}</span>
+                      <div className="bg-slate-900 p-3 rounded-lg border border-slate-800/50">
+                        <div className="flex items-center text-xs text-slate-400 mb-1">
+                          <Users className="w-3.5 h-3.5 mr-1.5" /> Abordagens (Relatório)
+                        </div>
+                        <div className="flex items-end gap-2">
+                          <span className="text-lg font-bold text-slate-200">{data.report.approaches}</span>
+                          <span className="text-xs text-slate-500 mb-1">/ {quotas.approaches}</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="bg-slate-900 p-3 rounded-lg border border-slate-800/50">
-                      <div className="flex items-center text-xs text-slate-400 mb-1">
-                        <Users className="w-3.5 h-3.5 mr-1.5" /> Abordagens
-                      </div>
-                      <div className="flex items-end gap-2">
-                        <span className="text-lg font-bold text-slate-200">{report.approaches}</span>
-                        <span className="text-xs text-slate-500 mb-1">/ {quotas.approaches}</span>
-                      </div>
-                    </div>
-                    <div className="bg-slate-900 p-3 rounded-lg border border-slate-800/50">
-                      <div className="flex items-center text-xs text-slate-400 mb-1">
-                        <ImageIcon className="w-3.5 h-3.5 mr-1.5" /> Comprovantes
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {report.proofUrls && report.proofUrls.length > 0 ? (
-                          report.proofUrls.map((url: string, index: number) => (
+                      <div className="bg-slate-900 p-3 rounded-lg border border-slate-800/50">
+                        <div className="flex items-center text-xs text-slate-400 mb-1">
+                          <ImageIcon className="w-3.5 h-3.5 mr-1.5" /> Comprovantes
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {data.report.proofUrls && data.report.proofUrls.length > 0 ? (
+                            data.report.proofUrls.map((url: string, index: number) => (
+                              <a 
+                                key={index}
+                                href={url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-xs font-medium text-cyan-400 hover:text-cyan-300 flex items-center bg-cyan-500/10 px-2 py-1 rounded"
+                              >
+                                Ver img {index + 1}
+                              </a>
+                            ))
+                          ) : data.report.proofUrl ? (
                             <a 
-                              key={index}
-                              href={url} 
+                              href={data.report.proofUrl} 
                               target="_blank" 
                               rel="noopener noreferrer"
                               className="text-xs font-medium text-cyan-400 hover:text-cyan-300 flex items-center bg-cyan-500/10 px-2 py-1 rounded"
                             >
-                              Ver img {index + 1}
+                              Ver imagem
                             </a>
-                          ))
-                        ) : report.proofUrl ? (
-                          <a 
-                            href={report.proofUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-xs font-medium text-cyan-400 hover:text-cyan-300 flex items-center bg-cyan-500/10 px-2 py-1 rounded"
-                          >
-                            Ver imagem
-                          </a>
-                        ) : (
-                          <span className="text-xs text-slate-500">Sem comprovante</span>
-                        )}
+                          ) : (
+                            <span className="text-xs text-slate-500">Sem comprovante</span>
+                          )}
+                        </div>
                       </div>
+                    </div>
+                  ) : (
+                    <div className="mb-4 text-sm text-slate-500 italic">
+                      Nenhum relatório manual enviado para este dia.
+                    </div>
+                  )}
+
+                  {/* Leads Approached on this day for this user */}
+                  <div className="pt-4 border-t border-slate-800/50">
+                    <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center">
+                      <Users className="w-4 h-4 mr-2 text-purple-400" />
+                      Leads Abordados Neste Dia ({data.leads.length})
+                    </h4>
+                    <div className="space-y-2">
+                      {data.leads.length === 0 ? (
+                        <p className="text-xs text-slate-500">Nenhum lead abordado neste dia.</p>
+                      ) : (
+                        data.leads.map(lead => (
+                          <div key={lead.id} className="bg-slate-900 p-3 rounded-lg border border-slate-800 flex justify-between items-center">
+                            <div>
+                              <p className="text-sm font-medium text-slate-200">{lead.name}</p>
+                              <p className="text-xs text-slate-500">{lead.phone}</p>
+                            </div>
+                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                              lead.status === 'converted' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                              lead.status === 'canceled' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                              'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                            }`}>
+                              {lead.status === 'converted' ? 'Convertido' : lead.status === 'canceled' ? 'Cancelado' : 'Em Negociação'}
+                            </span>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>

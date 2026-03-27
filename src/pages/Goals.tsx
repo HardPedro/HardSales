@@ -19,6 +19,9 @@ export const Goals: React.FC = () => {
     rewardValue: ''
   });
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
+  const [progressGoalId, setProgressGoalId] = useState<string | null>(null);
+  const [newProgressValue, setNewProgressValue] = useState('');
 
   useEffect(() => {
     if (!userData) return;
@@ -94,6 +97,28 @@ export const Goals: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const handleProgressClick = (goal: any) => {
+    setProgressGoalId(goal.id);
+    setNewProgressValue(goal.currentValue.toString());
+    setIsProgressModalOpen(true);
+  };
+
+  const handleUpdateProgress = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userData || userData.role !== 'admin' || !progressGoalId) return;
+
+    try {
+      await updateDoc(doc(db, 'goals', progressGoalId), {
+        currentValue: Number(newProgressValue)
+      });
+      setIsProgressModalOpen(false);
+      setProgressGoalId(null);
+      setNewProgressValue('');
+    } catch (error) {
+      console.error("Error updating progress:", error);
+    }
+  };
+
   const handleDeleteClick = async (goalId: string) => {
     if (window.confirm('Tem certeza que deseja excluir esta meta?')) {
       try {
@@ -167,10 +192,13 @@ export const Goals: React.FC = () => {
                   )}
                   {userData?.role === 'admin' && (
                     <div className="flex gap-2 mt-1">
-                      <button onClick={() => handleEditClick(goal)} className="text-slate-500 hover:text-cyan-400 transition-colors p-1">
+                      <button onClick={() => handleProgressClick(goal)} className="text-slate-500 hover:text-emerald-400 transition-colors p-1" title="Atualizar Progresso">
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => handleEditClick(goal)} className="text-slate-500 hover:text-cyan-400 transition-colors p-1" title="Editar Meta">
                         <Edit className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleDeleteClick(goal.id)} className="text-slate-500 hover:text-red-400 transition-colors p-1">
+                      <button onClick={() => handleDeleteClick(goal.id)} className="text-slate-500 hover:text-red-400 transition-colors p-1" title="Excluir Meta">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -298,6 +326,42 @@ export const Goals: React.FC = () => {
                   className="px-4 py-2 text-slate-950 font-semibold bg-cyan-400 hover:bg-cyan-300 rounded-lg transition-colors shadow-[0_0_10px_rgba(34,211,238,0.2)] w-full sm:w-auto order-1 sm:order-2"
                 >
                   {editingGoalId ? 'Salvar Alterações' : 'Salvar Meta'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Progress Modal */}
+      {isProgressModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-sm border border-slate-800 shadow-2xl">
+            <h2 className="text-xl font-bold mb-6 text-slate-100">Atualizar Progresso</h2>
+            <form onSubmit={handleUpdateProgress} className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Valor Atual</label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  className="w-full px-4 py-2 border border-slate-700 bg-slate-950 text-slate-100 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all"
+                  value={newProgressValue}
+                  onChange={e => setNewProgressValue(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col sm:flex-row justify-end gap-3 mt-8 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsProgressModalOpen(false)}
+                  className="px-4 py-2 text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors w-full sm:w-auto order-2 sm:order-1"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-slate-950 font-semibold bg-cyan-400 hover:bg-cyan-300 rounded-lg transition-colors shadow-[0_0_10px_rgba(34,211,238,0.2)] w-full sm:w-auto order-1 sm:order-2"
+                >
+                  Salvar
                 </button>
               </div>
             </form>

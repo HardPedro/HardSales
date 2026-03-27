@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, onSnapshot, doc, setDoc, updateDoc, where, getDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, setDoc, updateDoc, where, getDoc, deleteDoc, collectionGroup } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { CheckCircle, XCircle, UserPlus, TrendingUp, Phone, Users, DollarSign, Activity, AlertTriangle, ChevronRight, ArrowLeft, FileText, Trash2, Target, Calendar } from 'lucide-react';
+import { CheckCircle, XCircle, UserPlus, TrendingUp, Phone, Users, DollarSign, Activity, AlertTriangle, ChevronRight, ArrowLeft, FileText, Trash2, Target, Calendar, BookOpen } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -66,6 +66,20 @@ export const AdminDashboard: React.FC = () => {
       updateMetrics();
     });
 
+    let allStudyConfirmations: any[] = [];
+    const qStudy = query(collection(db, 'studyConfirmations'));
+    const unsubscribeStudy = onSnapshot(qStudy, (snapshot) => {
+      allStudyConfirmations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      updateMetrics();
+    });
+
+    let allAttendances: any[] = [];
+    const qAttendances = query(collectionGroup(db, 'attendances'));
+    const unsubscribeAttendances = onSnapshot(qAttendances, (snapshot) => {
+      allAttendances = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), meetingId: doc.ref.parent.parent?.id }));
+      updateMetrics();
+    });
+
     const updateMetrics = () => {
       // Calculate metrics per user for the current month
       const now = new Date();
@@ -85,7 +99,11 @@ export const AdminDashboard: React.FC = () => {
               totalApproaches: 0,
               reportCount: 0,
               reports: [],
-              leads: []
+              leads: [],
+              studyConfirmations: [],
+              attendances: [],
+              convertedLeads: 0,
+              canceledLeads: 0
             };
           }
           userMetrics[report.userId].totalCalls += report.calls || 0;
@@ -97,20 +115,82 @@ export const AdminDashboard: React.FC = () => {
 
       // Add leads to user metrics
       allLeads.forEach(lead => {
-        if (lead.assignedTo) {
-          if (!userMetrics[lead.assignedTo]) {
-            // If user has leads but no reports this month, initialize them
-            userMetrics[lead.assignedTo] = {
-              userId: lead.assignedTo,
-              userName: usersMap[lead.assignedTo]?.name || 'Usuário Desconhecido',
-              totalCalls: 0,
-              totalApproaches: 0,
-              reportCount: 0,
-              reports: [],
-              leads: []
-            };
+        if (lead.assignedTo && lead.assignedAt) {
+          const assignedDate = parseISO(lead.assignedAt);
+          if (isWithinInterval(assignedDate, { start, end })) {
+            if (!userMetrics[lead.assignedTo]) {
+              // If user has leads but no reports this month, initialize them
+              userMetrics[lead.assignedTo] = {
+                userId: lead.assignedTo,
+                userName: usersMap[lead.assignedTo]?.name || 'Usuário Desconhecido',
+                totalCalls: 0,
+                totalApproaches: 0,
+                reportCount: 0,
+                reports: [],
+                leads: [],
+                studyConfirmations: [],
+                attendances: [],
+                convertedLeads: 0,
+                canceledLeads: 0
+              };
+            }
+            userMetrics[lead.assignedTo].leads.push(lead);
+            if (lead.status === 'converted') {
+              userMetrics[lead.assignedTo].convertedLeads += 1;
+            } else if (lead.status === 'canceled') {
+              userMetrics[lead.assignedTo].canceledLeads += 1;
+            }
           }
-          userMetrics[lead.assignedTo].leads.push(lead);
+        }
+      });
+
+      // Add study confirmations to user metrics
+      allStudyConfirmations.forEach(conf => {
+        if (conf.userId && conf.createdAt) {
+          const confDate = parseISO(conf.createdAt);
+          if (isWithinInterval(confDate, { start, end })) {
+            if (!userMetrics[conf.userId]) {
+              userMetrics[conf.userId] = {
+                userId: conf.userId,
+                userName: usersMap[conf.userId]?.name || conf.username || 'Usuário Desconhecido',
+                totalCalls: 0,
+                totalApproaches: 0,
+                reportCount: 0,
+                reports: [],
+                leads: [],
+                studyConfirmations: [],
+                attendances: [],
+                convertedLeads: 0,
+                canceledLeads: 0
+              };
+            }
+            userMetrics[conf.userId].studyConfirmations.push(conf);
+          }
+        }
+      });
+
+      // Add attendances to user metrics
+      allAttendances.forEach(att => {
+        if (att.id && att.markedAt) { // att.id is the userId
+          const attDate = parseISO(att.markedAt);
+          if (isWithinInterval(attDate, { start, end })) {
+            if (!userMetrics[att.id]) {
+              userMetrics[att.id] = {
+                userId: att.id,
+                userName: usersMap[att.id]?.name || att.userName || 'Usuário Desconhecido',
+                totalCalls: 0,
+                totalApproaches: 0,
+                reportCount: 0,
+                reports: [],
+                leads: [],
+                studyConfirmations: [],
+                attendances: [],
+                convertedLeads: 0,
+                canceledLeads: 0
+              };
+            }
+            userMetrics[att.id].attendances.push(att);
+          }
         }
       });
 
@@ -122,6 +202,18 @@ export const AdminDashboard: React.FC = () => {
           if (!a.assignedAt) return 1;
           if (!b.assignedAt) return -1;
           return new Date(b.assignedAt).getTime() - new Date(a.assignedAt).getTime();
+        });
+        // Sort study confirmations by createdAt descending
+        user.studyConfirmations.sort((a: any, b: any) => {
+          if (!a.createdAt) return 1;
+          if (!b.createdAt) return -1;
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+        // Sort attendances by markedAt descending
+        user.attendances.sort((a: any, b: any) => {
+          if (!a.markedAt) return 1;
+          if (!b.markedAt) return -1;
+          return new Date(b.markedAt).getTime() - new Date(a.markedAt).getTime();
         });
       });
 
@@ -145,6 +237,8 @@ export const AdminDashboard: React.FC = () => {
       unsubscribeReports();
       unsubscribeLeads();
       unsubscribeUsers();
+      unsubscribeStudy();
+      unsubscribeAttendances();
     };
   }, [userData, selectedSeller?.userId]);
 
@@ -253,7 +347,7 @@ export const AdminDashboard: React.FC = () => {
           className="flex items-center text-sm font-medium text-cyan-400 hover:text-cyan-300 transition-colors"
         >
           <ArrowLeft className="w-4 h-4 mr-1" />
-          Voltar para Visão Geral
+          Voltar para Supervisão
         </button>
 
         <div className="bg-slate-900 rounded-2xl shadow-lg border border-slate-800 p-6">
@@ -307,7 +401,20 @@ export const AdminDashboard: React.FC = () => {
                 <p className="text-xs text-slate-500 mb-1">/ {quotas.approaches * selectedSeller.reportCount} meta</p>
               </div>
             </div>
-
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+              <div className="flex items-center text-slate-400 mb-2">
+                <CheckCircle className="w-4 h-4 mr-2 text-emerald-400" />
+                <span className="text-sm font-medium">Leads Convertidos</span>
+              </div>
+              <p className="text-2xl font-bold text-emerald-400">{selectedSeller.convertedLeads || 0}</p>
+            </div>
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+              <div className="flex items-center text-slate-400 mb-2">
+                <XCircle className="w-4 h-4 mr-2 text-red-400" />
+                <span className="text-sm font-medium">Leads Cancelados</span>
+              </div>
+              <p className="text-2xl font-bold text-red-400">{selectedSeller.canceledLeads || 0}</p>
+            </div>
           </div>
 
           <h3 className="text-lg font-bold text-slate-100 mb-4 flex items-center mt-8">
@@ -325,12 +432,12 @@ export const AdminDashboard: React.FC = () => {
                     <h4 className="font-bold text-slate-200 truncate pr-2">{lead.title}</h4>
                     <span className={`text-xs px-2 py-1 rounded-full border ${
                       lead.status === 'pending' ? 'bg-amber-400/10 text-amber-400 border-amber-400/20' :
-                      lead.status === 'negotiating' ? 'bg-blue-400/10 text-blue-400 border-blue-400/20' :
+                      (lead.status === 'approached' || lead.status === 'negociando') ? 'bg-blue-400/10 text-blue-400 border-blue-400/20' :
                       lead.status === 'converted' ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20' :
                       'bg-red-400/10 text-red-400 border-red-400/20'
                     }`}>
                       {lead.status === 'pending' ? 'Pendente' :
-                       lead.status === 'negotiating' ? 'Negociando' :
+                       (lead.status === 'approached' || lead.status === 'negociando') ? 'Abordado' :
                        lead.status === 'converted' ? 'Convertido' : 'Cancelado'}
                     </span>
                   </div>
@@ -346,6 +453,58 @@ export const AdminDashboard: React.FC = () => {
                       Assumido em {format(parseISO(lead.assignedAt), "dd/MM/yyyy HH:mm")}
                     </div>
                   )}
+                </div>
+              ))
+            )}
+          </div>
+
+          <h3 className="text-lg font-bold text-slate-100 mb-4 flex items-center mt-8">
+            <BookOpen className="w-5 h-5 mr-2 text-cyan-400" />
+            Resumos de Estudo ({selectedSeller.studyConfirmations?.length || 0})
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            {!selectedSeller.studyConfirmations || selectedSeller.studyConfirmations.length === 0 ? (
+              <p className="text-slate-500 col-span-full py-4">Nenhum resumo enviado.</p>
+            ) : (
+              selectedSeller.studyConfirmations.map((conf: any) => (
+                <div key={conf.id} className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col">
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-bold text-slate-200 truncate pr-2 flex items-center">
+                      <CheckCircle className="w-4 h-4 mr-1.5 text-emerald-400" />
+                      Resumo Enviado
+                    </h4>
+                    <span className="text-xs text-slate-500">
+                      {format(parseISO(conf.createdAt), "dd/MM/yyyy HH:mm")}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-400 line-clamp-3 mt-2">{conf.summary}</p>
+                </div>
+              ))
+            )}
+          </div>
+
+          <h3 className="text-lg font-bold text-slate-100 mb-4 flex items-center mt-8">
+            <Users className="w-5 h-5 mr-2 text-cyan-400" />
+            Presenças em Reuniões ({selectedSeller.attendances?.length || 0})
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            {!selectedSeller.attendances || selectedSeller.attendances.length === 0 ? (
+              <p className="text-slate-500 col-span-full py-4">Nenhuma presença registrada.</p>
+            ) : (
+              selectedSeller.attendances.map((att: any) => (
+                <div key={att.meetingId} className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col">
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-bold text-slate-200 truncate pr-2 flex items-center">
+                      <CheckCircle className="w-4 h-4 mr-1.5 text-emerald-400" />
+                      Presente
+                    </h4>
+                    <span className="text-xs text-slate-500">
+                      {format(parseISO(att.markedAt), "dd/MM/yyyy HH:mm")}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-400 mt-2">Reunião: {format(parseISO(att.meetingId), "dd/MM/yyyy")}</p>
                 </div>
               ))
             )}
@@ -455,7 +614,7 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-100">Visão Geral - Administração</h1>
+        <h1 className="text-2xl font-bold text-slate-100">Supervisão</h1>
       </div>
 
       {/* Access Requests Section */}
@@ -524,6 +683,7 @@ export const AdminDashboard: React.FC = () => {
                 <th className="px-6 py-4 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider">Relatórios</th>
                 <th className="px-6 py-4 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider">Ligações</th>
                 <th className="px-6 py-4 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider">Abordagens</th>
+                <th className="px-6 py-4 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider">Convertidos</th>
                 <th className="px-6 py-4 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider"></th>
               </tr>
             </thead>
@@ -570,6 +730,12 @@ export const AdminDashboard: React.FC = () => {
                         <span className={isBelowApproachesQuota ? 'text-amber-400 font-bold' : ''}>{metric.totalApproaches}</span>
                       </div>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <div className="flex items-center justify-center text-sm text-slate-300">
+                        <CheckCircle className="w-4 h-4 mr-1.5 text-emerald-400" />
+                        <span className="font-bold text-emerald-400">{metric.convertedLeads || 0}</span>
+                      </div>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <div className="flex items-center justify-end">
                         <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-cyan-400 transition-colors" />
@@ -580,7 +746,7 @@ export const AdminDashboard: React.FC = () => {
               })}
               {metrics.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
                     Nenhum dado registrado neste mês.
                   </td>
                 </tr>

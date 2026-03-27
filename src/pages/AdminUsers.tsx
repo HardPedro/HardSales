@@ -4,7 +4,7 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } f
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { auth, db, firebaseConfig } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Edit2, Trash2, User, Shield, AtSign } from 'lucide-react';
+import { Plus, Edit2, Trash2, User, Shield, AtSign, AlertTriangle, AlertCircle } from 'lucide-react';
 
 // Initialize a secondary app for user creation so the admin doesn't get logged out
 const secondaryApp = getApps().find(app => app.name === 'SecondaryApp') || initializeApp(firebaseConfig, 'SecondaryApp');
@@ -164,6 +164,7 @@ export const AdminUsers: React.FC = () => {
               <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Usuário</th>
               <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Nível</th>
               <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Equipe</th>
+              <th className="px-6 py-4 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider">Advertências</th>
               <th className="px-6 py-4 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Ações</th>
             </tr>
           </thead>
@@ -200,6 +201,42 @@ export const AdminUsers: React.FC = () => {
                   <div className="text-sm text-slate-300">
                     {user.teamId ? teams.find(t => t.id === user.teamId)?.name || 'Equipe não encontrada' : 'Sem equipe'}
                   </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-center">
+                  {user.role !== 'admin' && (
+                    <div className="flex items-center justify-center space-x-2">
+                      <button
+                        onClick={async () => {
+                          const currentWarnings = user.warnings || 0;
+                          if (currentWarnings > 0) {
+                            await updateDoc(doc(db, 'users', user.id), { warnings: currentWarnings - 1 });
+                          }
+                        }}
+                        className="w-6 h-6 rounded-full bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 flex items-center justify-center transition-colors"
+                      >
+                        -
+                      </button>
+                      <span className={`font-bold w-4 text-center ${
+                        (user.warnings || 0) === 0 ? 'text-slate-500' :
+                        (user.warnings || 0) === 1 ? 'text-yellow-400' :
+                        (user.warnings || 0) === 2 ? 'text-orange-400' :
+                        'text-red-500'
+                      }`}>
+                        {user.warnings || 0}
+                      </span>
+                      <button
+                        onClick={async () => {
+                          const currentWarnings = user.warnings || 0;
+                          if (currentWarnings < 3) {
+                            await updateDoc(doc(db, 'users', user.id), { warnings: currentWarnings + 1 });
+                          }
+                        }}
+                        className="w-6 h-6 rounded-full bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 flex items-center justify-center transition-colors"
+                      >
+                        +
+                      </button>
+                    </div>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button 

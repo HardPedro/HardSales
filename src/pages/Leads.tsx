@@ -5,6 +5,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { Upload, UserCheck, Phone, MapPin, ExternalLink, Filter, Search, Target, AlertCircle, CheckCircle2, XCircle, Clock, History, Trash2, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
+import { format, differenceInHours } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
 export const Leads: React.FC = () => {
   const { userData } = useAuth();
   const [leads, setLeads] = useState<any[]>([]);
@@ -14,6 +17,15 @@ export const Leads: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'available' | 'my_leads'>('available');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Filters for My Leads
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterDate, setFilterDate] = useState<string>('');
+
+  // Return Lead State
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [leadToReturn, setLeadToReturn] = useState<string | null>(null);
+  const [returnReason, setReturnReason] = useState('');
   
   // Import History State
   const [showHistory, setShowHistory] = useState(false);
@@ -274,9 +286,11 @@ export const Leads: React.FC = () => {
 
   const handleStatusChange = async (leadId: string, newStatus: string) => {
     try {
-      await updateDoc(doc(db, 'leads', leadId), {
-        status: newStatus
-      });
+      const updateData: any = { status: newStatus };
+      if (newStatus === 'negotiating') {
+        updateData.abordadoAt = new Date().toISOString();
+      }
+      await updateDoc(doc(db, 'leads', leadId), updateData);
       setSuccess("Status atualizado!");
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
@@ -285,7 +299,37 @@ export const Leads: React.FC = () => {
     }
   };
 
-  const availableLeads = leads.filter(l => l.status === 'available');
+  const handleReturnLead = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!leadToReturn || !returnReason.trim()) return;
+
+    try {
+      await updateDoc(doc(db, 'leads', leadToReturn), {
+        status: 'available',
+        assignedTo: null,
+        assignedAt: null,
+        returnedAt: new Date().toISOString(),
+        returnReason: returnReason.trim()
+      });
+      setSuccess("Lead devolvido com sucesso!");
+      setIsReturnModalOpen(false);
+      setLeadToReturn(null);
+      setReturnReason('');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error("Error returning lead:", err);
+      setError("Erro ao devolver lead.");
+    }
+  };
+
+  const availableLeads = leads.filter(l => {
+    if (l.status !== 'available') return false;
+    if (l.returnedAt) {
+      const hoursSinceReturn = differenceInHours(new Date(), new Date(l.returnedAt));
+      if (hoursSinceReturn > 72) return false;
+    }
+    return true;
+  });
   const myLeads = leads.filter(l => l.assignedTo === userData?.uid);
 
   const filteredAvailableLeads = availableLeads.filter(l => 
@@ -294,11 +338,21 @@ export const Leads: React.FC = () => {
     (l.categoryName && l.categoryName.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const filteredMyLeads = myLeads.filter(l => 
-    l.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (l.city && l.city.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (l.categoryName && l.categoryName.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredMyLeads = myLeads.filter(l => {
+    const matchesSearch = l.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (l.city && l.city.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (l.categoryName && l.categoryName.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    const matchesStatus = filterStatus === 'all' || l.status === filterStatus;
+    
+    let matchesDate = true;
+    if (filterDate) {
+      const assignedDate = l.assignedAt ? new Date(l.assignedAt).toISOString().split('T')[0] : '';
+      matchesDate = assignedDate === filterDate;
+    }
+
+    return matchesSearch && matchesStatus && matchesDate;
+  });
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -322,11 +376,17 @@ export const Leads: React.FC = () => {
       <div className="flex justify-between items-start mb-3">
         <div>
           <h3 className="text-lg font-bold text-slate-100">{lead.title}</h3>
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex flex-wrap items-center gap-2 mt-1">
             {getStatusBadge(lead.status)}
             {lead.categoryName && (
               <span className="text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded-full">
                 {lead.categoryName}
+              </span>
+            )}
+            {lead.returnedAt && !isMine && (
+              <span className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-1 rounded-full flex items-center" title={lead.returnReason}>
+                <AlertCircle className="w-3 h-3 mr-1" />
+                Devolvido
               </span>
             )}
           </div>
@@ -375,16 +435,27 @@ export const Leads: React.FC = () => {
         ) : <div />}
 
         {isMine ? (
-          <select
-            value={lead.status}
-            onChange={(e) => handleStatusChange(lead.id, e.target.value)}
-            className="bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block p-2"
-          >
-            <option value="pending">Pendente</option>
-            <option value="negotiating">Negociando</option>
-            <option value="converted">Convertido</option>
-            <option value="canceled">Cancelado</option>
-          </select>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setLeadToReturn(lead.id);
+                setIsReturnModalOpen(true);
+              }}
+              className="text-xs font-medium text-red-400 hover:text-red-300 transition-colors px-3 py-2 border border-red-500/20 rounded-lg hover:bg-red-500/10"
+            >
+              Devolver
+            </button>
+            <select
+              value={lead.status}
+              onChange={(e) => handleStatusChange(lead.id, e.target.value)}
+              className="bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-lg focus:ring-cyan-500 focus:border-cyan-500 block p-2"
+            >
+              <option value="pending" disabled={lead.status !== 'pending'}>Pendente</option>
+              <option value="negotiating" disabled={lead.status === 'converted' || lead.status === 'canceled'}>Abordado</option>
+              <option value="converted" disabled={lead.status === 'pending' || lead.status === 'canceled'}>Convertido</option>
+              <option value="canceled" disabled={lead.status === 'converted'}>Cancelado</option>
+            </select>
+          </div>
         ) : (
           <button
             onClick={() => handleAssumir(lead.id)}
@@ -489,17 +560,41 @@ export const Leads: React.FC = () => {
         </div>
 
         <div className="p-6">
-          <div className="mb-6 relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-slate-500" />
+          <div className="mb-6 flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-slate-500" />
+              </div>
+              <input
+                type="text"
+                placeholder="Buscar por nome, cidade ou categoria..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="block w-full pl-10 pr-3 py-2 border border-slate-700 rounded-xl leading-5 bg-slate-950 text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm transition-colors"
+              />
             </div>
-            <input
-              type="text"
-              placeholder="Buscar por nome, cidade ou categoria..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-slate-700 rounded-xl leading-5 bg-slate-950 text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 sm:text-sm transition-colors"
-            />
+            
+            {activeTab === 'my_leads' && (
+              <div className="flex gap-2">
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="bg-slate-950 border border-slate-700 text-slate-300 text-sm rounded-xl focus:ring-cyan-500 focus:border-cyan-500 block p-2"
+                >
+                  <option value="all">Todos os Status</option>
+                  <option value="pending">Pendente</option>
+                  <option value="negotiating">Abordado</option>
+                  <option value="converted">Convertido</option>
+                  <option value="canceled">Cancelado</option>
+                </select>
+                <input
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  className="bg-slate-950 border border-slate-700 text-slate-300 text-sm rounded-xl focus:ring-cyan-500 focus:border-cyan-500 block p-2 [color-scheme:dark]"
+                />
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -576,6 +671,57 @@ export const Leads: React.FC = () => {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+      {/* Return Lead Modal */}
+      {isReturnModalOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-slate-100 flex items-center">
+                <AlertCircle className="w-6 h-6 mr-2 text-red-400" />
+                Devolver Lead
+              </h3>
+              <button onClick={() => setIsReturnModalOpen(false)} className="text-slate-400 hover:text-slate-200">
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleReturnLead}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Justificativa para devolução
+                </label>
+                <textarea
+                  required
+                  rows={4}
+                  className="w-full px-4 py-3 border border-slate-700 bg-slate-950 text-slate-100 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all resize-none"
+                  placeholder="Explique por que está devolvendo este lead..."
+                  value={returnReason}
+                  onChange={(e) => setReturnReason(e.target.value)}
+                ></textarea>
+                <p className="text-xs text-slate-500 mt-2">
+                  Este lead voltará para a lista de disponíveis e sua justificativa ficará visível.
+                </p>
+              </div>
+              
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsReturnModalOpen(false)}
+                  className="px-4 py-2 text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                >
+                  Confirmar Devolução
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

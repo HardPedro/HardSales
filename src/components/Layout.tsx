@@ -17,7 +17,8 @@ import {
   X,
   Megaphone,
   Calendar,
-  Users2
+  Users2,
+  AlertTriangle
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -126,6 +127,26 @@ export const Layout: React.FC = () => {
             <span className="inline-block mt-3 px-3 py-1 text-xs font-semibold rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
               {userData?.role === 'admin' ? 'Administrador' : 'Vendedor'}
             </span>
+            
+            {userData?.role !== 'admin' && (userData?.warnings || 0) > 0 && (
+              <div className={`mt-4 p-3 rounded-lg border flex items-start gap-2 ${
+                userData.warnings === 1 ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400' :
+                userData.warnings === 2 ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' :
+                'bg-red-500/10 border-red-500/20 text-red-500'
+              }`}>
+                <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider mb-0.5">
+                    {userData.warnings === 1 ? 'Advertência Leve' :
+                     userData.warnings === 2 ? 'Estado Grave' :
+                     'Estado Crítico'}
+                  </p>
+                  <p className="text-[11px] opacity-80 leading-tight">
+                    Você possui {userData.warnings} advertência{userData.warnings > 1 ? 's' : ''}. Por favor, melhore seu desempenho.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
