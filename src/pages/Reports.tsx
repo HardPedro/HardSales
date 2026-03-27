@@ -3,7 +3,7 @@ import { collection, query, onSnapshot, addDoc, updateDoc, doc, orderBy, where, 
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, FileText, CheckCircle, XCircle, Clock, Calendar as CalendarIcon, Phone, Users, DollarSign, Settings, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { Plus, FileText, CheckCircle, CheckCircle2, XCircle, Clock, Calendar as CalendarIcon, Phone, Users, DollarSign, Settings, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameDay, isAfter, startOfDay, startOfWeek, endOfWeek, isWithinInterval, parseISO, isWeekend, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -186,6 +186,8 @@ export const Reports: React.FC = () => {
 
   const openReportModal = () => {
     setError(null);
+    const myLeadsToday = leadsForSelectedDate.filter(l => l.assignedTo === userData?.uid).length;
+    setNewReport({ calls: '', approaches: myLeadsToday.toString(), proofFiles: [] });
     setIsReportModalOpen(true);
   };
 
@@ -210,29 +212,36 @@ export const Reports: React.FC = () => {
     return format(new Date(l.abordadoAt), 'yyyy-MM-dd') === selectedDateStr;
   });
 
+  // Filter leads converted on selected date
+  const leadsConvertedSelectedDate = leads.filter(l => {
+    if (l.status !== 'converted' || !l.convertedAt) return false;
+    return format(new Date(l.convertedAt), 'yyyy-MM-dd') === selectedDateStr;
+  });
+
   // Group reports and leads by user for the selected date
   const usersWithActivity = new Set([
-    ...reportsForSelectedDate.map(r => r.userId),
-    ...leadsForSelectedDate.map(l => l.assignedTo)
+    ...reportsForSelectedDate.map(r => r.userId).filter(Boolean),
+    ...leadsForSelectedDate.map(l => l.assignedTo).filter(Boolean),
+    ...leadsConvertedSelectedDate.map(l => l.assignedTo).filter(Boolean)
   ]);
 
   const activityData = Array.from(usersWithActivity).map(userId => {
     const userReport = reportsForSelectedDate.find(r => r.userId === userId);
     const userLeads = leadsForSelectedDate.filter(l => l.assignedTo === userId);
+    const userConvertedLeads = leadsConvertedSelectedDate.filter(l => l.assignedTo === userId);
     
     // Try to get user name from report, or from leads
     let userName = userReport?.userName;
-    if (!userName && userLeads.length > 0) {
-      // We don't have the user name directly in the lead, so we might just say 'Vendedor'
-      // Or we can try to find it if we have a users list, but we don't fetch users here.
-      userName = 'Vendedor (Sem Relatório Manual)'; 
+    if (!userName && (userLeads.length > 0 || userConvertedLeads.length > 0)) {
+      userName = userId === userData?.uid ? (userData?.name || userData?.username || 'Você') : 'Vendedor (Sem Relatório Manual)'; 
     }
 
     return {
       userId,
       userName,
       report: userReport,
-      leads: userLeads
+      leads: userLeads,
+      convertedLeads: userConvertedLeads
     };
   });
   
@@ -532,16 +541,14 @@ export const Reports: React.FC = () => {
                   )}
 
                   {/* Leads Approached on this day for this user */}
-                  <div className="pt-4 border-t border-slate-800/50">
-                    <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center">
-                      <Users className="w-4 h-4 mr-2 text-purple-400" />
-                      Leads Abordados Neste Dia ({data.leads.length})
-                    </h4>
-                    <div className="space-y-2">
-                      {data.leads.length === 0 ? (
-                        <p className="text-xs text-slate-500">Nenhum lead abordado neste dia.</p>
-                      ) : (
-                        data.leads.map(lead => (
+                  {data.leads.length > 0 && (
+                    <div className="pt-4 border-t border-slate-800/50">
+                      <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center">
+                        <Users className="w-4 h-4 mr-2 text-purple-400" />
+                        Leads Abordados Neste Dia ({data.leads.length})
+                      </h4>
+                      <div className="space-y-2">
+                        {data.leads.map(lead => (
                           <div key={lead.id} className="bg-slate-900 p-3 rounded-lg border border-slate-800 flex justify-between items-center">
                             <div>
                               <p className="text-sm font-medium text-slate-200">{lead.name}</p>
@@ -555,10 +562,33 @@ export const Reports: React.FC = () => {
                               {lead.status === 'converted' ? 'Convertido' : lead.status === 'canceled' ? 'Cancelado' : 'Em Negociação'}
                             </span>
                           </div>
-                        ))
-                      )}
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {/* Leads Converted on this day for this user */}
+                  {data.convertedLeads.length > 0 && (
+                    <div className="pt-4 border-t border-slate-800/50 mt-4">
+                      <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center">
+                        <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-400" />
+                        Leads Convertidos Neste Dia ({data.convertedLeads.length})
+                      </h4>
+                      <div className="space-y-2">
+                        {data.convertedLeads.map(lead => (
+                          <div key={lead.id} className="bg-slate-900 p-3 rounded-lg border border-slate-800 flex justify-between items-center">
+                            <div>
+                              <p className="text-sm font-medium text-slate-200">{lead.name}</p>
+                              <p className="text-xs text-slate-500">{lead.phone}</p>
+                            </div>
+                            <span className="text-xs px-2 py-1 rounded-full font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              Convertido
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))
             )}
@@ -600,7 +630,9 @@ export const Reports: React.FC = () => {
                     value={newReport.approaches}
                     onChange={e => setNewReport({...newReport, approaches: e.target.value})}
                   />
-                  <p className="text-xs text-slate-500 mt-1">Meta: {quotas.approaches}</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Meta: {quotas.approaches} | O sistema registrou {leadsForSelectedDate.filter(l => l.assignedTo === userData?.uid).length} abordagens hoje.
+                  </p>
                 </div>
               </div>
               <div>
@@ -626,6 +658,35 @@ export const Reports: React.FC = () => {
                     {newReport.proofFiles.length} arquivo(s) selecionado(s).
                   </div>
                 )}
+              </div>
+
+              {/* Leads Approached List in Modal */}
+              <div className="pt-4 border-t border-slate-800">
+                <h4 className="text-sm font-semibold text-slate-300 mb-2 flex items-center">
+                  <Users className="w-4 h-4 mr-2 text-purple-400" />
+                  Leads Abordados Hoje ({leadsForSelectedDate.filter(l => l.assignedTo === userData?.uid).length})
+                </h4>
+                <div className="max-h-32 overflow-y-auto space-y-2 pr-2">
+                  {leadsForSelectedDate.filter(l => l.assignedTo === userData?.uid).length === 0 ? (
+                    <p className="text-xs text-slate-500 italic">Nenhum lead abordado hoje.</p>
+                  ) : (
+                    leadsForSelectedDate.filter(l => l.assignedTo === userData?.uid).map(lead => (
+                      <div key={lead.id} className="bg-slate-950 p-2 rounded-lg border border-slate-800 flex justify-between items-center">
+                        <div>
+                          <p className="text-xs font-medium text-slate-200">{lead.name}</p>
+                          <p className="text-[10px] text-slate-500">{lead.phone}</p>
+                        </div>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                          lead.status === 'converted' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                          lead.status === 'canceled' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                          'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                        }`}>
+                          {lead.status === 'converted' ? 'Convertido' : lead.status === 'canceled' ? 'Cancelado' : 'Em Negociação'}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
               <div className="flex flex-col sm:flex-row justify-end gap-3 mt-8 pt-4 border-t border-slate-800">
                 <button

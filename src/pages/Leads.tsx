@@ -289,6 +289,10 @@ export const Leads: React.FC = () => {
       const updateData: any = { status: newStatus };
       if (newStatus === 'negotiating') {
         updateData.abordadoAt = new Date().toISOString();
+      } else if (newStatus === 'converted') {
+        updateData.convertedAt = new Date().toISOString();
+      } else if (newStatus === 'canceled') {
+        updateData.canceledAt = new Date().toISOString();
       }
       await updateDoc(doc(db, 'leads', leadId), updateData);
       setSuccess("Status atualizado!");
