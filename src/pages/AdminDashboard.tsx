@@ -48,6 +48,7 @@ export const AdminDashboard: React.FC = () => {
       snapshot.docs.forEach(doc => {
         usersMap[doc.data().uid] = doc.data();
       });
+      updateMetrics();
     });
 
     // Fetch all leads
@@ -80,13 +81,32 @@ export const AdminDashboard: React.FC = () => {
       updateMetrics();
     });
 
-    const updateMetrics = () => {
+    function updateMetrics() {
       // Calculate metrics per user for the current month
       const now = new Date();
       const start = startOfMonth(now);
       const end = endOfMonth(now);
 
       const userMetrics: Record<string, any> = {};
+
+      // Initialize all users with role 'user'
+      Object.values(usersMap).forEach(user => {
+        if (user.role === 'user') {
+          userMetrics[user.uid] = {
+            userId: user.uid,
+            userName: user.name || user.username || 'Usuário Desconhecido',
+            totalCalls: 0,
+            totalApproaches: 0,
+            reportCount: 0,
+            reports: [],
+            leads: [],
+            studyConfirmations: [],
+            attendances: [],
+            convertedLeads: 0,
+            canceledLeads: 0
+          };
+        }
+      });
 
       allReports.forEach(report => {
         const reportDate = parseISO(report.date);

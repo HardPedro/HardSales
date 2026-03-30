@@ -13,7 +13,7 @@ export const Study: React.FC = () => {
   const [confirmations, setConfirmations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newMaterial, setNewMaterial] = useState({ title: '', description: '', link: '', deadline: '' });
+  const [newMaterial, setNewMaterial] = useState({ title: '', description: '', link: '', deadline: '', hasDeadline: true });
   const [uploadType, setUploadType] = useState<'link' | 'file'>('link');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -78,7 +78,8 @@ export const Study: React.FC = () => {
         const updateData: any = {
           title: newMaterial.title,
           description: newMaterial.description,
-          deadline: new Date(newMaterial.deadline).toISOString(),
+          hasDeadline: newMaterial.hasDeadline,
+          deadline: newMaterial.hasDeadline && newMaterial.deadline ? new Date(newMaterial.deadline).toISOString() : null,
         };
         if (uploadType === 'link' && newMaterial.link) {
           updateData.link = newMaterial.link;
@@ -91,14 +92,15 @@ export const Study: React.FC = () => {
           title: newMaterial.title,
           description: newMaterial.description,
           link: finalLink,
-          deadline: new Date(newMaterial.deadline).toISOString(),
+          hasDeadline: newMaterial.hasDeadline,
+          deadline: newMaterial.hasDeadline && newMaterial.deadline ? new Date(newMaterial.deadline).toISOString() : null,
           createdAt: new Date().toISOString(),
           confirmedBy: []
         });
       }
       
       setIsModalOpen(false);
-      setNewMaterial({ title: '', description: '', link: '', deadline: '' });
+      setNewMaterial({ title: '', description: '', link: '', deadline: '', hasDeadline: true });
       setSelectedFile(null);
       setEditingMaterialId(null);
     } catch (error: any) {
@@ -114,6 +116,7 @@ export const Study: React.FC = () => {
       title: material.title, 
       description: material.description, 
       link: material.link,
+      hasDeadline: material.hasDeadline !== false,
       deadline: material.deadline ? new Date(material.deadline).toISOString().split('T')[0] : '' 
     });
     setUploadType('link');
@@ -133,7 +136,7 @@ export const Study: React.FC = () => {
   };
 
   const openNewModal = () => {
-    setNewMaterial({ title: '', description: '', link: '', deadline: '' });
+    setNewMaterial({ title: '', description: '', link: '', deadline: '', hasDeadline: true });
     setUploadType('link');
     setSelectedFile(null);
     setEditingMaterialId(null);
@@ -198,7 +201,7 @@ export const Study: React.FC = () => {
         {materials.map((material) => {
           const hasConfirmed = material.confirmedBy?.includes(userData?.username);
           
-          const hoursToDeadline = material.deadline ? differenceInHours(new Date(material.deadline), new Date()) : null;
+          const hoursToDeadline = material.hasDeadline !== false && material.deadline ? differenceInHours(new Date(material.deadline), new Date()) : null;
           const isUrgent = !hasConfirmed && hoursToDeadline !== null && hoursToDeadline > 0 && hoursToDeadline <= 12;
 
           return (
@@ -219,8 +222,14 @@ export const Study: React.FC = () => {
                       ? 'text-red-400 bg-red-950/50 border-red-500/30 animate-pulse' 
                       : 'text-slate-400 bg-slate-950 border-slate-800'
                   }`}>
-                    Prazo: {format(new Date(material.deadline), "dd/MM/yyyy")}
-                    {isUrgent && <span className="ml-1 font-bold">({hoursToDeadline}h)</span>}
+                    {material.hasDeadline !== false && material.deadline ? (
+                      <>
+                        Prazo: {format(new Date(material.deadline), "dd/MM/yyyy")}
+                        {isUrgent && <span className="ml-1 font-bold">({hoursToDeadline}h)</span>}
+                      </>
+                    ) : (
+                      'Sem prazo'
+                    )}
                   </span>
                   {userData?.role === 'admin' && (
                     <div className="flex gap-2">
@@ -377,14 +386,28 @@ export const Study: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Prazo para Leitura</label>
-                <input
-                  type="date"
-                  required
-                  className="w-full px-4 py-2 border border-slate-700 bg-slate-950 text-slate-100 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all [color-scheme:dark]"
-                  value={newMaterial.deadline}
-                  onChange={e => setNewMaterial({...newMaterial, deadline: e.target.value})}
-                />
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-slate-300">Prazo para Leitura</label>
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={newMaterial.hasDeadline}
+                      onChange={e => setNewMaterial({...newMaterial, hasDeadline: e.target.checked})}
+                    />
+                    <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500 relative"></div>
+                    <span className="ml-2 text-sm text-slate-400">Possui prazo?</span>
+                  </label>
+                </div>
+                {newMaterial.hasDeadline && (
+                  <input
+                    type="date"
+                    required
+                    className="w-full px-4 py-2 border border-slate-700 bg-slate-950 text-slate-100 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none transition-all [color-scheme:dark]"
+                    value={newMaterial.deadline}
+                    onChange={e => setNewMaterial({...newMaterial, deadline: e.target.value})}
+                  />
+                )}
               </div>
               <div className="flex flex-col sm:flex-row justify-end gap-3 mt-8 pt-4 border-t border-slate-800">
                 <button
