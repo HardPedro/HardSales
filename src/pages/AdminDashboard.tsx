@@ -237,7 +237,7 @@ export const AdminDashboard: React.FC = () => {
         });
       });
 
-      setMetrics(Object.values(userMetrics).sort((a, b) => b.totalApproaches - a.totalApproaches));
+      setMetrics(Object.values(userMetrics).sort((a, b) => (b.totalApproaches + b.totalCalls) - (a.totalApproaches + a.totalCalls)));
       
       // Update selected seller if open
       if (selectedSeller) {

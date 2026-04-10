@@ -16,7 +16,7 @@ export const Dashboard: React.FC = () => {
     if (!userData) return;
 
     // Fetch reports for top sellers
-    const qReports = query(collection(db, 'reports'), orderBy('approaches', 'desc'), limit(10));
+    const qReports = query(collection(db, 'reports'));
     const unsubscribeReports = onSnapshot(qReports, (snapshot) => {
       const reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
@@ -25,7 +25,7 @@ export const Dashboard: React.FC = () => {
         if (!userSales[r.userId]) {
           userSales[r.userId] = { name: r.userName || r.userId, volume: 0 };
         }
-        userSales[r.userId].volume += (r.approaches || 0);
+        userSales[r.userId].volume += (r.approaches || 0) + (r.calls || 0);
       });
 
       const sortedSellers = Object.values(userSales).sort((a, b) => b.volume - a.volume);
@@ -81,7 +81,7 @@ export const Dashboard: React.FC = () => {
               <TrendingUp className="h-6 w-6" />
             </div>
             <div className="ml-5">
-              <p className="text-sm font-medium text-slate-400">Total de Abordagens</p>
+              <p className="text-sm font-medium text-slate-400">Total de Interações</p>
               <p className="text-2xl font-bold text-slate-100 mt-1">
                 {topSellers.reduce((acc, s) => acc + s.volume, 0).toLocaleString('pt-BR')}
               </p>
@@ -109,7 +109,7 @@ export const Dashboard: React.FC = () => {
               <Trophy className="h-6 w-6" />
             </div>
             <div className="ml-5">
-              <p className="text-sm font-medium text-slate-400">Top Abordagens</p>
+              <p className="text-sm font-medium text-slate-400">Top Interações</p>
               <p className="text-lg font-bold text-slate-100 mt-1 truncate">
                 {topSellers[0]?.name || 'N/A'}
               </p>
@@ -168,7 +168,7 @@ export const Dashboard: React.FC = () => {
         <div className="bg-slate-900 p-6 rounded-2xl shadow-lg border border-slate-800">
           <h2 className="text-lg font-bold text-slate-100 mb-6 flex items-center">
             <TrendingUp className="w-5 h-5 mr-2 text-cyan-400" />
-            Abordagens por Vendedor
+            Interações por Vendedor
           </h2>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -177,7 +177,7 @@ export const Dashboard: React.FC = () => {
                 <XAxis dataKey="name" stroke="#64748b" tick={{ fill: '#64748b' }} axisLine={false} tickLine={false} />
                 <YAxis stroke="#64748b" tick={{ fill: '#64748b' }} axisLine={false} tickLine={false} />
                 <Tooltip 
-                  formatter={(value) => `${value} abordagens`}
+                  formatter={(value) => `${value} interações`}
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f1f5f9', borderRadius: '0.5rem' }}
                   itemStyle={{ color: '#22d3ee' }}
                 />

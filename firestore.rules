@@ -94,10 +94,11 @@ service cloud.firestore {
     }
 
     function isValidStudyMaterial() {
-      return hasRequiredFields(['title', 'deadline', 'createdAt']) &&
+      return hasRequiredFields(['title', 'createdAt']) &&
              isValidStringLength('title', 1, 200) &&
-             request.resource.data.deadline is string &&
              request.resource.data.createdAt is string &&
+             (!('deadline' in request.resource.data) || request.resource.data.deadline == null || request.resource.data.deadline is string) &&
+             (!('hasDeadline' in request.resource.data) || request.resource.data.hasDeadline is bool) &&
              (!('description' in request.resource.data) || request.resource.data.description is string) &&
              (!('link' in request.resource.data) || request.resource.data.link is string) &&
              (!('confirmedBy' in request.resource.data) || request.resource.data.confirmedBy is list);
@@ -200,7 +201,12 @@ service cloud.firestore {
         (uidUnchanged() && isOwner(userId) && 'email' in request.auth.token && request.auth.token.email == 'pedrohardsolu2025@gmail.com' && request.resource.data.role == 'admin') ||
         (uidUnchanged() && isOwner(userId) && 'email' in request.auth.token && request.auth.token.email == 'harddisk@salesmanager.local' && request.resource.data.role == 'admin')
       );
-      allow update: if isAuthenticated() && isValidUser() && uidNotModified() && (isAdmin() || (isOwner(userId) && request.resource.data.role == resource.data.role));
+      allow update: if isAuthenticated() && isValidUser() && uidNotModified() && (
+        isAdmin() || 
+        (isOwner(userId) && 
+         request.resource.data.role == resource.data.role &&
+         (!('warnings' in request.resource.data) || request.resource.data.warnings == resource.data.warnings))
+      );
       allow delete: if isAdmin();
     }
 
@@ -279,6 +285,10 @@ service cloud.firestore {
         allow create, update: if isAuthenticated() && request.auth.uid == userId;
         allow delete: if isAdmin();
       }
+    }
+
+    match /{path=**}/attendances/{userId} {
+      allow read: if isAuthenticated();
     }
 
     match /access_requests/{requestId} {
