@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { collection, query, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Trophy, TrendingUp, Target, Users } from 'lucide-react';
+import { Trophy, TrendingUp, Target, Users, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export const Dashboard: React.FC = () => {
@@ -66,11 +66,34 @@ export const Dashboard: React.FC = () => {
 
   if (loading) return <div className="text-slate-400">Carregando dashboard...</div>;
 
+  const warnings = userData?.warnings || 0;
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-3xl font-bold text-slate-100 tracking-tight">Dashboard</h1>
       </div>
+
+      {warnings > 0 && (
+        <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+          warnings === 1 ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400' :
+          warnings === 2 ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' :
+          'bg-red-500/10 border-red-500/20 text-red-400'
+        }`}>
+          <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
+          <div>
+            <h3 className="font-bold">
+              {warnings === 1 ? 'Atenção: Advertência Leve' :
+               warnings === 2 ? 'Aviso Importante: Estado Grave' :
+               'Alerta Crítico: Estado Crítico'}
+            </h3>
+            <p className="text-sm opacity-90 mt-1">
+              Você possui {warnings} {warnings === 1 ? 'advertência registrada' : 'advertências registradas'} em seu perfil. 
+              {warnings >= 3 && ' Por favor, entre em contato com a supervisão imediatamente.'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
