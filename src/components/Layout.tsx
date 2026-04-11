@@ -18,7 +18,8 @@ import {
   Megaphone,
   Calendar,
   Users2,
-  AlertTriangle
+  AlertTriangle,
+  PenTool
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -47,6 +48,7 @@ export const Layout: React.FC = () => {
     { name: 'Estudo', path: '/study', icon: BookOpen },
     { name: 'Reuniões', path: '/meetings', icon: Calendar },
     { name: 'Relatórios', path: '/reports', icon: FileText },
+    { name: 'Quadros Brancos', path: '/whiteboards', icon: PenTool },
   ];
 
   const adminItems = [

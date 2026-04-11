@@ -15,6 +15,8 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { Announcements } from './pages/Announcements';
 import { Meetings } from './pages/Meetings';
 import { Leads } from './pages/Leads';
+import { WhiteboardsList } from './pages/WhiteboardsList';
+import { WhiteboardView } from './pages/WhiteboardView';
 
 export default function App() {
   return (
@@ -32,6 +34,8 @@ export default function App() {
             <Route path="/announcements" element={<Announcements />} />
             <Route path="/meetings" element={<Meetings />} />
             <Route path="/leads" element={<Leads />} />
+            <Route path="/whiteboards" element={<WhiteboardsList />} />
+            <Route path="/whiteboards/:id" element={<WhiteboardView />} />
             
             {/* Admin Routes */}
             <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>} />

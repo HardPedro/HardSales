@@ -291,6 +291,11 @@ service cloud.firestore {
       allow read: if isAuthenticated();
     }
 
+    match /whiteboards/{boardId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+    
     match /access_requests/{requestId} {
       allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == requestId);
       allow create: if isAuthenticated() && isValidAccessRequest() && request.auth.uid == request.resource.data.uid;
