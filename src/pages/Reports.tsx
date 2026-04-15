@@ -3,7 +3,7 @@ import { collection, query, onSnapshot, addDoc, updateDoc, doc, orderBy, where, 
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, FileText, CheckCircle, CheckCircle2, XCircle, Clock, Calendar as CalendarIcon, Phone, Users, DollarSign, Settings, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { Plus, FileText, CheckCircle, CheckCircle2, XCircle, Clock, Calendar as CalendarIcon, Phone, Users, DollarSign, Settings, Image as ImageIcon, Trash2, Edit } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameDay, isAfter, startOfDay, startOfWeek, endOfWeek, isWithinInterval, parseISO, isWeekend, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -20,6 +20,7 @@ export const Reports: React.FC = () => {
   
   // Forms
   const [newReport, setNewReport] = useState<{ calls: string, approaches: string, proofFiles: File[] }>({ calls: '', approaches: '', proofFiles: [] });
+  const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [newQuotas, setNewQuotas] = useState({ calls: '', approaches: '' });
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,7 +122,7 @@ export const Reports: React.FC = () => {
     e.preventDefault();
     if (!userData) return;
 
-    if (newReport.proofFiles.length === 0) {
+    if (!editingReportId && newReport.proofFiles.length === 0) {
       setError("É obrigatório enviar pelo menos 1 comprovante.");
       return;
     }
@@ -133,23 +134,38 @@ export const Reports: React.FC = () => {
 
     setUploading(true);
     try {
-      // Compress images and convert to base64 strings
-      const proofUrls = await Promise.all(newReport.proofFiles.map(file => compressImage(file)));
+      let proofUrls: string[] = [];
+      if (newReport.proofFiles.length > 0) {
+        proofUrls = await Promise.all(newReport.proofFiles.map(file => compressImage(file) as Promise<string>));
+      }
 
-      await addDoc(collection(db, 'reports'), {
-        userId: userData.uid,
-        userName: userData.name || userData.username || 'Usuário',
-        date: format(selectedDate, 'yyyy-MM-dd'),
-        calls: Number(newReport.calls) || 0,
-        approaches: Number(newReport.approaches) || 0,
-        proofUrls: proofUrls,
-        createdAt: new Date().toISOString()
-      });
+      if (editingReportId) {
+        const updateData: any = {
+          calls: Number(newReport.calls) || 0,
+          approaches: Number(newReport.approaches) || 0,
+          updatedAt: new Date().toISOString()
+        };
+        if (proofUrls.length > 0) {
+          updateData.proofUrls = proofUrls;
+        }
+        await updateDoc(doc(db, 'reports', editingReportId), updateData);
+      } else {
+        await addDoc(collection(db, 'reports'), {
+          userId: userData.uid,
+          userName: userData.name || userData.username || 'Usuário',
+          date: format(selectedDate, 'yyyy-MM-dd'),
+          calls: Number(newReport.calls) || 0,
+          approaches: Number(newReport.approaches) || 0,
+          proofUrls: proofUrls,
+          createdAt: new Date().toISOString()
+        });
+      }
       setIsReportModalOpen(false);
       setNewReport({ calls: '', approaches: '', proofFiles: [] });
+      setEditingReportId(null);
       setError(null);
     } catch (error: any) {
-      console.error("Error adding report:", error);
+      console.error("Error saving report:", error);
       setError("Erro ao salvar relatório: " + error.message);
     } finally {
       setUploading(false);
@@ -186,8 +202,21 @@ export const Reports: React.FC = () => {
 
   const openReportModal = () => {
     setError(null);
-    const myLeadsToday = leadsForSelectedDate.filter(l => l.assignedTo === userData?.uid).length;
-    setNewReport({ calls: '', approaches: myLeadsToday.toString(), proofFiles: [] });
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const todayReport = reports.find(r => r.date === todayStr && r.userId === userData?.uid);
+    
+    if (todayReport) {
+      setEditingReportId(todayReport.id);
+      setNewReport({ 
+        calls: todayReport.calls.toString(), 
+        approaches: todayReport.approaches.toString(), 
+        proofFiles: [] 
+      });
+    } else {
+      setEditingReportId(null);
+      const myLeadsToday = leadsForSelectedDate.filter(l => l.assignedTo === userData?.uid).length;
+      setNewReport({ calls: '', approaches: myLeadsToday.toString(), proofFiles: [] });
+    }
     setIsReportModalOpen(true);
   };
 
@@ -337,15 +366,15 @@ export const Reports: React.FC = () => {
           {(userData?.role === 'user' || userData?.role === 'admin') && (
             <button
               onClick={openReportModal}
-              disabled={!isToday(selectedDate) || hasReportForToday}
+              disabled={!isToday(selectedDate)}
               className={`flex items-center justify-center px-4 py-2 rounded-lg transition-colors w-full sm:w-auto ${
-                !isToday(selectedDate) || hasReportForToday
+                !isToday(selectedDate)
                   ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
                   : 'bg-cyan-600 text-white hover:bg-cyan-500 shadow-[0_0_10px_rgba(8,145,178,0.3)]'
               }`}
             >
-              <Plus className="w-5 h-5 mr-2" />
-              {hasReportForToday ? 'Relatório Enviado' : 'Enviar Relatório de Hoje'}
+              {hasReportForToday ? <Edit className="w-5 h-5 mr-2" /> : <Plus className="w-5 h-5 mr-2" />}
+              {hasReportForToday ? 'Editar Relatório de Hoje' : 'Enviar Relatório de Hoje'}
             </button>
           )}
         </div>
@@ -600,7 +629,9 @@ export const Reports: React.FC = () => {
       {isReportModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-md border border-slate-800 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-6 text-slate-100">Relatório de Hoje</h2>
+            <h2 className="text-xl font-bold mb-6 text-slate-100">
+              {editingReportId ? 'Editar Relatório de Hoje' : 'Relatório de Hoje'}
+            </h2>
             {error && (
               <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
                 {error}
@@ -636,7 +667,9 @@ export const Reports: React.FC = () => {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Comprovantes das Ligações (Obrigatório, máx 10)</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Comprovantes das Ligações {editingReportId ? '(Opcional, máx 10)' : '(Obrigatório, máx 10)'}
+                </label>
                 <input
                   type="file"
                   accept="image/*"
@@ -652,7 +685,11 @@ export const Reports: React.FC = () => {
                     setNewReport({...newReport, proofFiles: files});
                   }}
                 />
-                <p className="text-xs text-slate-500 mt-1">Selecione até 10 imagens. Elas serão comprimidas automaticamente.</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {editingReportId 
+                    ? 'Selecione novas imagens apenas se quiser substituir as anteriores.' 
+                    : 'Selecione até 10 imagens. Elas serão comprimidas automaticamente.'}
+                </p>
                 {newReport.proofFiles.length > 0 && (
                   <div className="mt-2 text-xs text-slate-400">
                     {newReport.proofFiles.length} arquivo(s) selecionado(s).
@@ -705,10 +742,10 @@ export const Reports: React.FC = () => {
                   {uploading ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-slate-950 mr-2"></div>
-                      Enviando...
+                      Salvando...
                     </>
                   ) : (
-                    'Enviar Relatório'
+                    editingReportId ? 'Salvar Alterações' : 'Enviar Relatório'
                   )}
                 </button>
               </div>
