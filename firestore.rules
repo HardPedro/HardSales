@@ -256,7 +256,13 @@ service cloud.firestore {
     match /reports/{reportId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidReport() && isOwner(request.resource.data.userId);
-      allow update: if isAdmin() && isValidReport();
+      allow update: if isAuthenticated() && isValidReport() && (
+        isAdmin() || 
+        (isOwner(resource.data.userId) && 
+         request.resource.data.userId == resource.data.userId &&
+         request.resource.data.date == resource.data.date &&
+         request.resource.data.createdAt == resource.data.createdAt)
+      );
       allow delete: if isAdmin();
     }
 
